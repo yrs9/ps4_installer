@@ -39,8 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _pickAndSend() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pkg'],
+        type: FileType.any,
       );
 
       if (result != null && result.files.single.path != null) {
