@@ -33,7 +33,7 @@ class InstallerHomePage extends StatefulWidget {
 
 class _InstallerHomePageState extends State<InstallerHomePage> {
   final TextEditingController _ipController = TextEditingController(text: '192.168.1.');
-  String _statusMessage = 'جاهز للاستخدام';
+  String _statusMessage = 'جاهز للاستخدام وربط الـ PS4';
   bool _isUploading = false;
 
   Future<void> _pickAndSendFile() async {
@@ -49,14 +49,14 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
 
         if (ps4Ip.isEmpty) {
           setState(() {
-            _statusMessage = 'الرجاء إدخال عنوان IP الخاص بالـ PS4';
+            _statusMessage = 'الرجاء إدخال عنوان IP الخاص بالـ PS4 أولاً';
           });
           return;
         }
 
         setState(() {
           _isUploading = true;
-          _statusMessage = 'جاري إرسال اللعبة إلى PS4...';
+          _statusMessage = 'جاري إرسال اللعبة إلى الـ PS4...';
         });
 
         var uri = Uri.parse('http://$ps4Ip:12800/api/install');
@@ -67,11 +67,11 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال اللعبة بنجاح إلى PS4!';
+            _statusMessage = 'تم إرسال اللعبة بنجاح إلى الـ PS4!';
           });
         } else {
           setState(() {
-            _statusMessage = 'فشل الإرسال، تأكد من فتح برنامج التثبيت على PS4 (كود: ${response.statusCode})';
+            _statusMessage = 'فشل الإرسال، تأكد من فتح برنامج التثبيت على الـ PS4 (كود: ${response.statusCode})';
           });
         }
       } else {
@@ -102,25 +102,29 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const Icon(Icons.sports_esports, size: 80, color: Colors.blueAccent),
+            const SizedBox(height: 20),
             TextField(
               controller: _ipController,
               decoration: const InputDecoration(
                 labelText: 'PS4 IP Address',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.network_check),
+                prefixIcon: Icon(Icons.wifi),
               ),
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 55,
               child: ElevatedButton.icon(
                 onPressed: _isUploading ? null : _pickAndSendFile,
                 icon: const Icon(Icons.folder_open),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                ),
                 label: const Text(
-                  'اختيار ملف PKG وإرساله',
+                  'اختر ملف PKG وأرسله',
                   style: TextStyle(fontSize: 18, color: Colors.white),
                 ),
               ),
@@ -131,7 +135,7 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
             Text(
               _statusMessage,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.amber),
+              style: const TextStyle(fontSize: 16, color: Colors.amber, fontWeight: FontWeight.bold),
             ),
           ],
         ),
