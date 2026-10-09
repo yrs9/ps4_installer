@@ -4,39 +4,39 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 
 void main() {
-  runApp(const Ps4InstallerApp());
+  runApp(const MyApp());
 }
 
-class Ps4InstallerApp extends StatelessWidget {
-  const Ps4InstallerApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'PS4 Remote Installer',
+      title: 'PS4 Installer',
       theme: ThemeData(
         brightness: Brightness.dark,
         primarySwatch: Colors.blue,
       ),
-      home: const InstallerHomePage(),
+      home: const HomeScreen(),
     );
   }
 }
 
-class InstallerHomePage extends StatefulWidget {
-  const InstallerHomePage({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<InstallerHomePage> createState() => _InstallerHomePageState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _InstallerHomePageState extends State<InstallerHomePage> {
-  final TextEditingController _ipController = TextEditingController(text: '192.168.1.');
-  String _statusMessage = 'جاهز للاستخدام وربط الـ PS4';
-  bool _isUploading = false;
+class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _ipController = TextEditingController();
+  String _status = 'جاهز';
+  bool _loading = false;
 
-  Future<void> _pickAndSendFile() async {
+  Future<void> _pickAndSend() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -45,21 +45,21 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
 
       if (result != null && result.files.single.path != null) {
         File file = File(result.files.single.path!);
-        String ps4Ip = _ipController.text.trim();
+        String ip = _ipController.text.trim();
 
-        if (ps4Ip.isEmpty) {
+        if (ip.isEmpty) {
           setState(() {
-            _statusMessage = 'الرجاء إدخال عنوان IP الخاص بالـ PS4 أولاً';
+            _status = 'يرجى إدخال IP الخاص بالـ PS4';
           });
           return;
         }
 
         setState(() {
-          _isUploading = true;
-          _statusMessage = 'جاري إرسال اللعبة إلى الـ PS4...';
+          _loading = true;
+          _status = 'جاري إرسال الملف...';
         });
 
-        var uri = Uri.parse('http://$ps4Ip:12800/api/install');
+        var uri = Uri.parse('http://$ip:12800/api/install');
         var request = http.MultipartRequest('POST', uri)
           ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
@@ -67,25 +67,25 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال اللعبة بنجاح إلى الـ PS4!';
+            _status = 'تم الإرسال بنجاح!';
           });
         } else {
           setState(() {
-            _statusMessage = 'فشل الإرسال، تأكد من فتح برنامج التثبيت على الـ PS4 (كود: ${response.statusCode})';
+            _status = 'فشل الإرسال (رمز: ${response.statusCode})';
           });
         }
       } else {
         setState(() {
-          _statusMessage = 'تم إلغاء اختيار الملف.';
+          _status = 'تم إلغاء اختيار الملف.';
         });
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'حدث خطأ: $e';
+        _status = 'حدث خطأ: $e';
       });
     } finally {
       setState(() {
-        _isUploading = false;
+        _loading = false;
       });
     }
   }
@@ -102,40 +102,26 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.sports_esports, size: 80, color: Colors.blueAccent),
-            const SizedBox(height: 20),
             TextField(
               controller: _ipController,
               decoration: const InputDecoration(
                 labelText: 'PS4 IP Address',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.wifi),
               ),
               keyboardType: TextInputType.number,
             ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton.icon(
-                onPressed: _isUploading ? null : _pickAndSendFile,
-                icon: const Icon(Icons.folder_open),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                ),
-                label: const Text(
-                  'اختر ملف PKG وأرسله',
-                  style: TextStyle(fontSize: 18, color: Colors.white),
-                ),
-              ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _loading ? null : _pickAndSend,
+              child: const Text('اختيار ملف وإرسال'),
             ),
-            const SizedBox(height: 30),
-            if (_isUploading) const CircularProgressIndicator(),
+            const SizedBox(height: 20),
+            if (_loading) const CircularProgressIndicator(),
             const SizedBox(height: 20),
             Text(
-              _statusMessage,
+              _status,
+              style: const TextStyle(fontSize: 16, color: Colors.amber),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.amber, fontWeight: FontWeight.bold),
             ),
           ],
         ),
