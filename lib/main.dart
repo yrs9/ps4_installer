@@ -18,6 +18,7 @@ class Ps4InstallerApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         primarySwatch: Colors.blue,
+        fontFamily: 'Roboto', // استخدام خط أساسي مستقر لتجنب مشاكل الحروف
       ),
       home: const InstallerHomePage(),
     );
@@ -101,40 +102,42 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          TextField(
-            controller: _ipController,
-            decoration: const InputDecoration(
-              labelText: 'PS4 IP Address',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.network_check),
+          children: [
+            TextField(
+              controller: _ipController,
+              decoration: const InputDecoration(
+                labelText: 'PS4 IP Address',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.network_check),
+              ),
+              keyboardType: TextInputType.number,
             ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 30),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: _isUploading ? null : _pickAndSendFile,
-              icon: const Icon(Icons.folder_open),
-              label: const Text(
-                'اختر ملف PKG وأرسله',
-                style: TextStyle(fontSize: 18),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _isUploading ? null : _pickAndSendFile,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                ),
+                child: const Text(
+                  'اختيار ملف PKG وإرساله',
+                  style: TextStyle(fontSize: 18, color: Colors.white),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 30),
-          if (_isUploading) const CircularProgressIndicator(),
-          const SizedBox(height: 20),
-          Text(
-            _statusMessage,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: Colors.amber),
-          ),
-        ],
+            const SizedBox(height: 30),
+            if (_isUploading) const CircularProgressIndicator(),
+            const SizedBox(height: 20),
+            Text(
+              _statusMessage,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, color: Colors.amber),
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 }
