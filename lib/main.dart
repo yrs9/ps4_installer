@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
-import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 
 void main() {
@@ -36,38 +35,9 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
   final TextEditingController _ipController = TextEditingController(text: '192.168.1.');
   String _statusMessage = 'جاهز للاستخدام';
   bool _isUploading = false;
-  double _uploadProgress = 0.0;
 
-  @override
-  void initState() {
-    super.initState();
-    _requestPermissions();
-  }
-
-  // طلب إذن الوصول إلى الملفات عند فتح التطبيق
-  Future<void> _requestPermissions() async {
-    var status = await Permission.storage.request();
-    var manageStatus = await Permission.manageExternalStorage.request();
-    
-    if (status.isGranted || manageStatus.isGranted) {
-      setState(() {
-        _statusMessage = 'تم منح إذن الوصول للملفات بنجاح';
-      });
-    } else {
-      setState(() {
-        _statusMessage = 'يرجى السماح بالوصول للملفات من إعدادات الهاتف لاختيار الألعاب';
-      });
-    }
-  }
-
-  // اختيار ملف الـ PKG وإرساله إلى الـ PS4
   Future<void> _pickAndSendFile() async {
     try {
-      // التأكد من الأذونات قبل فتح مدير الملفات
-      if (await Permission.storage.isDenied && await Permission.manageExternalStorage.isDenied) {
-        await _requestPermissions();
-      }
-
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pkg'],
@@ -79,33 +49,29 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
 
         if (ps4Ip.isEmpty) {
           setState(() {
-            _statusMessage = 'الرجاء إدخال عنوان IP الخاص بالـ PS4 بشكل صحيح';
+            _statusMessage = 'الرجاء إدخال عنوان IP الخاص بالـ PS4';
           });
           return;
         }
 
         setState(() {
           _isUploading = true;
-          _uploadProgress = 0.0;
-          _statusMessage = 'جاري تحضير ملف اللعبة للإرسال...';
+          _statusMessage = 'جاري إرسال اللعبة إلى PS4...';
         });
 
         var uri = Uri.parse('http://$ps4Ip:12800/api/install');
-        var request = http.MultipartRequest('POST', uri);
-        
-        var multipartFile = await http.MultipartFile.fromPath('file', file.path);
-        request.files.add(multipartFile);
+        var request = http.MultipartRequest('POST', uri)
+          ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
-        var streamedResponse = await request.send();
-        var response = await http.Response.fromStream(streamedResponse);
+        var response = await request.send();
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال اللعبة بنجاح إلى الـ PS4 وبدأ التثبيت!';
+            _statusMessage = 'تم إرسال اللعبة بنجاح إلى PS4!';
           });
         } else {
           setState(() {
-            _statusMessage = 'فشل الإرسال، تأكد من فتح تطبيق التثبيت على الـ PS4 (كود الخطأ: ${response.statusCode})';
+            _statusMessage = 'فشل الإرسال، تأكد من فتح برنامج التثبيت على PS4 (كود: ${response.statusCode})';
           });
         }
       } else {
@@ -115,7 +81,7 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'حدث خطأ أثناء الإرسال: $e';
+        _statusMessage = 'حدث خطأ: $e';
       });
     } finally {
       setState(() {
@@ -136,42 +102,36 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.sports_esports, size: 80, color: Colors.blueAccent),
-            const SizedBox(height: 20),
             TextField(
               controller: _ipController,
               decoration: const InputDecoration(
-                labelText: 'عنوان IP الخاص بالـ PS4',
+                labelText: 'PS4 IP Address',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.wifi),
+                prefixIcon: Icon(Icons.network_check),
               ),
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
-              height: 55,
+              height: 50,
               child: ElevatedButton.icon(
                 onPressed: _isUploading ? null : _pickAndSendFile,
                 icon: const Icon(Icons.folder_open),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                ),
-                child: const Text(
-                  'اختر ملف PKG وأرسله للـ PS4',
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                label: const Text(
+                  'اختيار ملف PKG وإرساله',
                   style: TextStyle(fontSize: 18, color: Colors.white),
                 ),
               ),
             ),
             const SizedBox(height: 30),
-            if (_isUploading) ...[
-              const LinearProgressIndicator(),
-              const SizedBox(height: 15),
-            ],
+            if (_isUploading) const CircularProgressIndicator(),
+            const SizedBox(height: 20),
             Text(
               _statusMessage,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.amber, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 16, color: Colors.amber),
             ),
           ],
         ),
