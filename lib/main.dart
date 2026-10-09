@@ -56,10 +56,9 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
 
         setState(() {
           _isUploading = true;
-          _statusMessage = 'جاري إرسال الملف إلى PS4...';
+          _statusMessage = 'جاري إرسال اللعبة إلى PS4...';
         });
 
-        // إرسال طلب التثبيت إلى الـ PS4 (Port 12800 المعتاد لبرامج التثبيت)
         var uri = Uri.parse('http://$ps4Ip:12800/api/install');
         var request = http.MultipartRequest('POST', uri)
           ..files.add(await http.MultipartFile.fromPath('file', file.path));
@@ -68,11 +67,11 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال اللعبة/التثبيت بنجاح إلى PS4!';
+            _statusMessage = 'تم إرسال اللعبة بنجاح إلى PS4!';
           });
         } else {
           setState(() {
-            _statusMessage = 'فشل الإرسال، تأكد من أن تطبيق التثبيت مفتوح على الـ PS4 (كود: ${response.statusCode})';
+            _statusMessage = 'فشل الإرسال، تأكد من فتح برنامج التثبيت على PS4 (كود: ${response.statusCode})';
           });
         }
       } else {
@@ -102,40 +101,40 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _ipController,
-              decoration: const InputDecoration(
-                labelText: 'PS4 IP Address',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.network_check),
+        children: [
+          TextField(
+            controller: _ipController,
+            decoration: const InputDecoration(
+              labelText: 'PS4 IP Address',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.network_check),
+            ),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 30),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _isUploading ? null : _pickAndSendFile,
+              icon: const Icon(Icons.folder_open),
+              label: const Text(
+                'اختر ملف PKG وأرسله',
+                style: TextStyle(fontSize: 18),
               ),
-              keyboardType: TextInputType.number,
             ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _isUploading ? null : _pickAndSendFile,
-                icon: const Icon(Icons.folder_open),
-                label: const Text(
-                  'اختر ملف PKG وأرسله',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-            if (_isUploading) const CircularProgressIndicator(),
-            const SizedBox(height: 20),
-            Text(
-              _statusMessage,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.amber),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 30),
+          if (_isUploading) const CircularProgressIndicator(),
+          const SizedBox(height: 20),
+          Text(
+            _statusMessage,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16, color: Colors.amber),
+          ),
+        ],
       ),
+    ),
     );
   }
 }
