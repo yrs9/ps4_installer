@@ -31,17 +31,24 @@ class InstallerPage extends StatefulWidget {
 class _InstallerPageState extends State<InstallerPage> {
   final TextEditingController _ipController = TextEditingController(text: '192.168.0.131');
   bool _isSending = false;
-  String _statusMessage = 'جاهز للاستخدام - اضغط للارسال';
+  String _statusMessage = 'جاهز للاستخدام - اضغط للإرسال';
 
   Future<void> _pickAndSendFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pkg'],
+        type: FileType.any,
       );
 
       if (result != null && result.files.single.path != null) {
         File file = File(result.files.single.path!);
+        
+        if (!file.path.toLowerCase().endsWith('.pkg')) {
+          setState(() {
+            _statusMessage = 'خطأ: يرجى اختيار ملف يحمل امتداد .pkg فقط';
+          });
+          return;
+        }
+
         String ip = _ipController.text.trim();
 
         setState(() {
