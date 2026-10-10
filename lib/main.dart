@@ -1,91 +1,89 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io';
 
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'PS4 Installer',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.blue,
-      ),
-      home: const HomeScreen(),
+      title: 'PS4 Remote Installer',
+      theme: ThemeData.dark(),
+      home: const InstallerPage(),
     );
   }
 }
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class InstallerPage extends StatefulWidget {
+  const InstallerPage({Key? key}) : super(key: key);
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  _InstallerPageState createState() => _InstallerPageState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController _ipController = TextEditingController();
-  String _status = 'جاهز';
-  bool _loading = false;
+class _InstallerPageState extends State<InstallerPage> {
+  final TextEditingController _ipController = TextEditingController(text: '192.168.0.131');
+  bool _isSending = false;
+  String _statusMessage = '';
 
-  Future<void> _pickAndSend() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-      );
+  Future<void> _pickAndSendFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pkg'],
+    );
 
-      if (result != null && result.files.single.path != null) {
-        File file = File(result.files.single.path!);
-        String ip = _ipController.text.trim();
+    if (result != null && result.files.single.path != null) {
+      File file = File(result.files.single.path!);
+      String ip = _ipController.text.trim();
 
-        if (ip.isEmpty) {
-          setState(() {
-            _status = 'يرجى إدخال IP الخاص بالـ PS4';
-          });
-          return;
-        }
+      setState(() {
+        _isSending = true;
+        _statusMessage = 'جاري إرسال الملف...';
+      });
 
-        setState(() {
-          _loading = true;
-          _status = 'جاري إرسال الملف...';
-        });
-
+      try {
         var uri = Uri.parse('http://$ip:12800/api/install');
-        var request = http.MultipartRequest('POST', uri)
-          ..files.add(await http.MultipartFile.fromPath('file', file.path));
+        var request = http.MultipartRequest('POST', uri);
+        
+        // إضافة الملف مع ضبط الـ stream لتجنب انقطاع الاتصال Broken pipe
+        request.files.add(
+          await http.MultipartFile.fromPath('file', file.path),
+        );
 
-        var response = await request.send();
+        var streamedResponse = await request.send().timeout(
+          const Duration(hours: 2), // مهلة زمنية طويلة للألعاب الكبيرة
+          onTimeout: () {
+            throw Exception('انتهت مهلة الاتصال (Timeout)');
+          },
+        );
+
+        var response = await http.Response.fromStream(streamedResponse);
 
         if (response.statusCode == 200) {
           setState(() {
-            _status = 'تم الإرسال بنجاح!';
+            _statusMessage = 'تم إرسال الملف بنجاح إلى PS4!';
           });
         } else {
           setState(() {
-            _status = 'فشل الإرسال (رمز: ${response.statusCode})';
+            _statusMessage = 'خطأ من البلايستيشن: ${response.statusCode}';
           });
         }
-      } else {
+      } catch (e) {
         setState(() {
-          _status = 'تم إلغاء اختيار الملف.';
+          _statusMessage = 'حدث خطأ: $e';
+        });
+      } finally {
+        setState(() {
+          _isSending = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _status = 'حدث خطأ: $e';
-      });
-    } finally {
-      setState(() {
-        _loading = false;
-      });
     }
   }
 
@@ -94,10 +92,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('PS4 Remote Installer'),
-        centerTitle: true,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -110,17 +107,17 @@ class _HomeScreenState extends State<HomeScreen> {
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _loading ? null : _pickAndSend,
-              child: const Text('اختيار ملف وإرسال'),
-            ),
-            const SizedBox(height: 20),
-            if (_loading) const CircularProgressIndicator(),
+            _isSending
+                const CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: _pickAndSendFile,
+                    child: const Text('اختيار ملف وإرسال'),
+                  ),
             const SizedBox(height: 20),
             Text(
-              _status,
-              style: const TextStyle(fontSize: 16, color: Colors.amber),
+              _statusMessage,
               textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, color: Colors.amber),
             ),
           ],
         ),
