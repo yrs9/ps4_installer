@@ -50,25 +50,30 @@ class _InstallerPageState extends State<InstallerPage> {
     try {
       final router = shelf_router.Router();
 
-      router.get('/pkg', (shelf.Request request) {
-        if (_selectedFilePath == null) {
-          return shelf.Response.notFound('File not found');
-        }
-        File file = File(_selectedFilePath!);
-        if (!file.existsSync()) {
-          return shelf.Response.notFound('File not found on disk');
-        }
-        
-        final length = file.lengthSync();
-        final stream = file.openRead();
+      router.get('/pkg', (shelf.Request request) async {
+        try {
+          if (_selectedFilePath == null) {
+            return shelf.Response.notFound('File not selected');
+          }
+          File file = File(_selectedFilePath!);
+          if (!await file.exists()) {
+            return shelf.Response.notFound('File not found on disk');
+          }
+          
+          final length = await file.length();
+          final stream = file.openRead();
 
-        return shelf.Response.ok(
-          stream,
-          headers: {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': length.toString(),
-          },
-        );
+          return shelf.Response.ok(
+            stream,
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'Content-Length': length.toString(),
+              'Accept-Ranges': 'bytes',
+            },
+          );
+        } catch (e) {
+          return shelf.Response.internalServerError(body: 'Server Error: $e');
+        }
       });
 
       final info = NetworkInfo();
@@ -80,7 +85,7 @@ class _InstallerPageState extends State<InstallerPage> {
       });
     } catch (e) {
       setState(() {
-        _statusMessage = 'خطأ في تشغيل السيرفر المحلي: $e';
+        _statusMessage = 'خطأ في السيرفر المحلي: $e';
       });
     }
   }
@@ -94,9 +99,10 @@ class _InstallerPageState extends State<InstallerPage> {
       if (result != null && result.files.single.path != null) {
         File file = File(result.files.single.path!);
         
+        // التحقق من أن الملف ينتهي بـ pkg
         if (!file.path.toLowerCase().endsWith('.pkg')) {
           setState(() {
-            _statusMessage = 'خطأ: يرجى اختيار ملف يحمل امتداد .pkg فقط';
+            _statusMessage = 'خطأ: يرجى اختيار ملف يحمل امتداد .pkg حصراً';
           });
           return;
         }
@@ -109,7 +115,7 @@ class _InstallerPageState extends State<InstallerPage> {
         
         if (phoneIp == null) {
           setState(() {
-            _statusMessage = 'خطأ: لم يتم التعرف على شبكة الواي فاي/الهوتسبوت';
+            _statusMessage = 'خطأ: لم يتم التعرف على شبكة الاتصال';
           });
           return;
         }
@@ -122,7 +128,6 @@ class _InstallerPageState extends State<InstallerPage> {
 
         var uri = Uri.parse('http://$ps4Ip:12800/api/install');
         
-        // إرسال الطلب بنفس هيكلية وطريقة سكريبت Node.js الصحيحة تماماً
         var response = await http.post(
           uri,
           headers: {'Content-Type': 'application/json'},
@@ -134,11 +139,11 @@ class _InstallerPageState extends State<InstallerPage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال الرابط بنجاح! السحب الفوري بدأ على PS4';
+            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن فوراً...';
           });
         } else {
           setState(() {
-            _statusMessage = 'خطأ من البلايستيشن: ${response.statusCode}';
+            _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
           });
         }
       }
