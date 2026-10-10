@@ -50,18 +50,19 @@ class _InstallerPageState extends State<InstallerPage> {
     try {
       final router = shelf_router.Router();
 
-      router.get('/pkg', (shelf.Request request) async {
+      router.get('/pkg', (shelf.Request request) {
         try {
           if (_selectedFilePath == null) {
-            return shelf.Response.notFound('File not selected');
-          }
-          File file = File(_selectedFilePath!);
-          if (!await file.exists()) {
-            return shelf.Response.notFound('File not found on disk');
+            return shelf.Response.notFound('No file selected');
           }
           
-          final length = await file.length();
-          final stream = file.openRead();
+          File file = File(_selectedFilePath!);
+          if (!file.existsSync()) {
+            return shelf.Response.notFound('File does not exist on disk');
+          }
+
+          int length = file.lengthSync();
+          var stream = file.openRead();
 
           return shelf.Response.ok(
             stream,
@@ -72,7 +73,7 @@ class _InstallerPageState extends State<InstallerPage> {
             },
           );
         } catch (e) {
-          return shelf.Response.internalServerError(body: 'Server Error: $e');
+          return shelf.Response.internalServerError(body: 'Error: $e');
         }
       });
 
@@ -85,7 +86,7 @@ class _InstallerPageState extends State<InstallerPage> {
       });
     } catch (e) {
       setState(() {
-        _statusMessage = 'خطأ في السيرفر المحلي: $e';
+        _statusMessage = 'خطأ في تشغيل السيرفر المحلي: $e';
       });
     }
   }
@@ -94,125 +95,22 @@ class _InstallerPageState extends State<InstallerPage> {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.any,
+        allowMultiple: false,
       );
 
       if (result != null && result.files.single.path != null) {
-        File file = File(result.files.single.path!);
+        String filePath = result.files.single.path!;
         
-        // التحقق من أن الملف ينتهي بـ pkg
-        if (!file.path.toLowerCase().endsWith('.pkg')) {
+        if (!filePath.toLowerCase().endsWith('.pkg')) {
           setState(() {
             _statusMessage = 'خطأ: يرجى اختيار ملف يحمل امتداد .pkg حصراً';
           });
           return;
         }
 
-        _selectedFilePath = file.path;
-        String ps4Ip = _ipController.text.trim();
-        
-        final info = NetworkInfo();
-        String? phoneIp = await info.getWifiIP();
-        
-        if (phoneIp == null) {
-          setState(() {
-            _statusMessage = 'خطأ: لم يتم التعرف على شبكة الاتصال';
-          });
-          return;
-        }
-
-        String pkgUrl = 'http://$phoneIp:8080/pkg';
-
         setState(() {
-          _statusMessage = 'جاري إرسال الرابط للبلايستيشن...';
+          _selectedFilePath = filePath;
+          _statusMessage = 'جاري تجهيز الرابط وإرساله للـ PS4...';
         });
 
-        var uri = Uri.parse('http://$ps4Ip:12800/api/install');
-        
-        var response = await http.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            "type": "direct",
-            "packages": [pkgUrl]
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          setState(() {
-            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن فوراً...';
-          });
-        } else {
-          setState(() {
-            _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
-          });
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _statusMessage = 'خطأ: $e';
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _localServer?.close();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF3B82F6);
-    const Color backgroundColor = Color(0xFF121212);
-
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        title: const Text('PS4 Remote Installer'),
-        backgroundColor: Colors.black54,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _ipController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'PS4 IP Address',
-                labelStyle: TextStyle(color: Colors.grey),
-                border: OutlineInputBorder(),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: primaryColor),
-                ),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 25),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: _isHosting ? _pickAndSendToPS4 : null,
-              child: const Text(
-                'اختر ملف PKG وابدأ السحب الفوري',
-                style: TextStyle(fontSize: 16, color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 25),
-            Text(
-              _statusMessage,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.amber),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+        String ps4Ip = _ipController.text.
