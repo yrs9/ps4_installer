@@ -31,24 +31,24 @@ class InstallerPage extends StatefulWidget {
 class _InstallerPageState extends State<InstallerPage> {
   final TextEditingController _ipController = TextEditingController(text: '192.168.0.131');
   bool _isSending = false;
-  String _statusMessage = 'جاهز للاتصال بالبلايستيشن';
+  String _statusMessage = 'جاهز للاستخدام - اضغط للارسال';
 
   Future<void> _pickAndSendFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pkg'],
-    );
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pkg'],
+      );
 
-    if (result != null && result.files.single.path != null) {
-      File file = File(result.files.single.path!);
-      String ip = _ipController.text.trim();
+      if (result != null && result.files.single.path != null) {
+        File file = File(result.files.single.path!);
+        String ip = _ipController.text.trim();
 
-      setState(() {
-        _isSending = true;
-        _statusMessage = 'جاري إرسال الملف...';
-      });
+        setState(() {
+          _isSending = true;
+          _statusMessage = 'جاري إرسال الملف...';
+        });
 
-      try {
         var uri = Uri.parse('http://$ip:12800/api/install');
         var request = http.MultipartRequest('POST', uri);
         
@@ -74,15 +74,15 @@ class _InstallerPageState extends State<InstallerPage> {
             _statusMessage = 'خطأ من البلايستيشن: ${response.statusCode}';
           });
         }
-      } catch (e) {
-        setState(() {
-          _statusMessage = 'حدث خطأ: $e';
-        });
-      } finally {
-        setState(() {
-          _isSending = false;
-        });
       }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'خطأ: $e';
+      });
+    } finally {
+      setState(() {
+        _isSending = false;
+      });
     }
   }
 
@@ -105,18 +105,25 @@ class _InstallerPageState extends State<InstallerPage> {
               ),
               keyboardType: TextInputType.number,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
             _isSending
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                    ),
                     onPressed: _pickAndSendFile,
-                    child: const Text('اختيار ملف وإرسال'),
+                    child: const Text(
+                      'اختيار ملف وإرسال',
+                      style: TextStyle(fontSize: 18, color: Colors.white),
+                    ),
                   ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
             Text(
               _statusMessage,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.green),
+              style: const TextStyle(fontSize: 16, color: Colors.amber),
             ),
           ],
         ),
