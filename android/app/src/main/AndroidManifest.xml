@@ -1,10 +1,8 @@
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.ps4_installer">
-    
-    <uses-permission android:name="android.permission.INTERNET" />
-
     <application
-        android:label="PS4 Installer"
+        android:label="ps4_installer"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -17,8 +15,8 @@
             android:windowSoftInputMode="adjustResize">
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
-              android:theme="@style/NormalTheme"
-              android:value="@style/Resource$style" />
+              android:resource="@style/NormalTheme"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
