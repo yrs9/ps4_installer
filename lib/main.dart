@@ -50,42 +50,50 @@ class _InstallerPageState extends State<InstallerPage> {
         }
 
         String ip = _ipController.text.trim();
+        int totalSize = await file.length();
 
         setState(() {
           _isSending = true;
-          _statusMessage = 'جاري رفع الملف، انتظر قليلاً...';
+          _statusMessage = 'جاري النقل بأقصى سرعة...';
         });
 
         var uri = Uri.parse('http://$ip:12800/api/install');
-        var request = http.MultipartRequest('POST', uri);
         
-        request.files.add(
-          await http.MultipartFile.fromPath('file', file.path),
-        );
+        // استخدام StreamedRequest لنقل مباشر بدون تحميل الذاكرة
+        var request = http.StreamedRequest('POST', uri);
+        request.headers['content-type'] = 'application/octet-stream';
+        request.contentLength = totalSize;
 
-        // إرسال الطلب مع مهلة طويلة جداً لملفات الألعاب الكبيرة
+        // فتح الملف وقراءته بسرعة عالية وإرساله للـ Sink دفعة دفعة
+        var fileStream = file.openRead();
+        
+        // ربط البث بشكل مباشر وسريع جداً
+        request.sink.addStream(fileStream).then((_) {
+          request.sink.close();
+        }).catchError((err) {
+          request.sink.addError(err);
+        });
+
         var streamedResponse = await request.send().timeout(
-          const Duration(hours: 4),
+          const Duration(hours: 3),
           onTimeout: () {
-            throw Exception('انتهت مهلة الاتصال بسبب حجم الملف');
+            throw Exception('انتهت مهلة الاتصال');
           },
         );
 
-        var response = await http.Response.fromStream(streamedResponse);
-
-        if (response.statusCode == 200) {
+        if (streamedResponse.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال اللعبة بنجاح إلى PS4! تحقق من شاشة البلايستيشن';
+            _statusMessage = 'تم إرسال اللعبة بنجاح إلى PS4!';
           });
         } else {
           setState(() {
-            _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
+            _statusMessage = 'خطأ من البلايستيشن: ${streamedResponse.statusCode}';
           });
         }
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'خطأ أثناء الإرسال: تأكد من بقاء التطبيق مفتوحاً';
+        _statusMessage = 'خطأ في النقل: تأكد من الاتصال وسرعة الشبكة';
       });
     } finally {
       setState(() {
@@ -130,7 +138,7 @@ class _InstallerPageState extends State<InstallerPage> {
                       CircularProgressIndicator(color: primaryColor),
                       SizedBox(height: 15),
                       Text(
-                        'جاري رفع الملف إلى البلايستيشن...\nلا تقفل الشاشة انتظر حتى يكتمل',
+                        'جاري نقل البيانات بأقصى سرعة للـ PS4...\nيرجى الانتظار...',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 14, color: Colors.blueAccent),
                       ),
