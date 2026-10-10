@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
@@ -45,12 +46,10 @@ class _InstallerPageState extends State<InstallerPage> {
     _startLocalServer();
   }
 
-  // تشغيل خادم محلي مصغر داخل الهاتف تماماً مثل Node.js
   Future<void> _startLocalServer() async {
     try {
       final router = shelf_router.Router();
 
-      // مسار تحميل الملف للبلايستيشن
       router.get('/pkg', (shelf.Request request) {
         if (_selectedFilePath == null) {
           return shelf.Response.notFound('File not found');
@@ -72,7 +71,6 @@ class _InstallerPageState extends State<InstallerPage> {
         );
       });
 
-      // الحصول على آي بي الهاتف المحلي
       final info = NetworkInfo();
       String? localIp = await info.getWifiIP() ?? '127.0.0.1';
 
@@ -80,7 +78,6 @@ class _InstallerPageState extends State<InstallerPage> {
       setState(() {
         _isHosting = true;
       });
-      print('Local server running at http://$localIp:8080/pkg');
     } catch (e) {
       setState(() {
         _statusMessage = 'خطأ في تشغيل السيرفر المحلي: $e';
@@ -88,7 +85,6 @@ class _InstallerPageState extends State<InstallerPage> {
     }
   }
 
-  // اختيار الملف وإرسال الرابط للبلايستيشن فوراً
   Future<void> _pickAndSendToPS4() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -108,7 +104,6 @@ class _InstallerPageState extends State<InstallerPage> {
         _selectedFilePath = file.path;
         String ps4Ip = _ipController.text.trim();
         
-        // الحصول على آي بي الهاتف الحالي لإنشاء رابط السيرفر
         final info = NetworkInfo();
         String? phoneIp = await info.getWifiIP();
         
@@ -125,16 +120,21 @@ class _InstallerPageState extends State<InstallerPage> {
           _statusMessage = 'جاري إرسال الرابط للبلايستيشن...';
         });
 
-        // إرسال طلب التثبيت للـ PS4 (بنفس طريقة Node.js)
         var uri = Uri.parse('http://$ps4Ip:12800/api/install');
+        
+        // إرسال الطلب بنفس هيكلية وطريقة سكريبت Node.js الصحيحة تماماً
         var response = await http.post(
           uri,
-          body: {'type': 'direct', 'packages': '["$pkgUrl"]'},
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            "type": "direct",
+            "packages": [pkgUrl]
+          }),
         );
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال رابط اللعبة بنجاح! البلايستيشن يسحب اللعبة الآن مباشرة...';
+            _statusMessage = 'تم إرسال الرابط بنجاح! السحب الفوري بدأ على PS4';
           });
         } else {
           setState(() {
@@ -163,7 +163,7 @@ class _InstallerPageState extends State<InstallerPage> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('PS4 Remote Installer (Server Mode)'),
+        title: const Text('PS4 Remote Installer'),
         backgroundColor: Colors.black54,
       ),
       body: Padding(
