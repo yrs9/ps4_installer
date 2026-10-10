@@ -53,27 +53,14 @@ class _InstallerPageState extends State<InstallerPage> {
 
         setState(() {
           _isSending = true;
-          _statusMessage = 'جاري إرسال الملف للـ PS4...';
+          _statusMessage = 'جاري إرسال الملف إلى PS4...';
         });
 
         var uri = Uri.parse('http://$ip:12800/api/install');
-        var request = http.StreamedRequest('POST', uri);
-        request.headers['content-type'] = 'application/octet-stream';
-        request.contentLength = await file.length();
-
-        // إرسال الملف على أجزاء لمنع انقطاع الـ Broken pipe
-        var stream = file.openRead();
-        stream.listen(
-          (chunk) {
-            request.sink.add(chunk);
-          },
-          onDone: () {
-            request.sink.close();
-          },
-          onError: (error) {
-            request.sink.addError(error);
-          },
-          cancelOnError: true,
+        var request = http.MultipartRequest('POST', uri);
+        
+        request.files.add(
+          await http.MultipartFile.fromPath('file', file.path),
         );
 
         var streamedResponse = await request.send().timeout(
@@ -83,19 +70,21 @@ class _InstallerPageState extends State<InstallerPage> {
           },
         );
 
-        if (streamedResponse.statusCode == 200) {
+        var response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 200) {
           setState(() {
             _statusMessage = 'تم إرسال الملف بنجاح إلى PS4!';
           });
         } else {
           setState(() {
-            _statusMessage = 'خطأ من البلايستيشن: ${streamedResponse.statusCode}';
+            _statusMessage = 'خطأ من البلايستيشن: ${response.statusCode}';
           });
         }
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'خطأ في الاتصال: تأكد من فتح برنامج التثبيت على PS4';
+        _statusMessage = 'خطأ: تأكد من صحة الـ IP وأن التطبيق مفتوح';
       });
     } finally {
       setState(() {
