@@ -2,6 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:shelf_router/shelf_router.dart' as shelf_router;
+import 'package:network_info_plus/network_info_plus.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,10 +34,62 @@ class InstallerPage extends StatefulWidget {
 
 class _InstallerPageState extends State<InstallerPage> {
   final TextEditingController _ipController = TextEditingController(text: '10.16.250.133');
-  bool _isSending = false;
-  String _statusMessage = 'جاهز للاستخدام - اضغط للإرسال';
+  HttpServer? _localServer;
+  String? _selectedFilePath;
+  String _statusMessage = 'جاهز - يرجى اختيار ملف PKG';
+  bool _isHosting = false;
 
-  Future<void> _pickAndSendFile() async {
+  @override
+  void initState() {
+    super.initState();
+    _startLocalServer();
+  }
+
+  // تشغيل خادم محلي مصغر داخل الهاتف تماماً مثل Node.js
+  Future<void> _startLocalServer() async {
+    try {
+      final router = shelf_router.Router();
+
+      // مسار تحميل الملف للبلايستيشن
+      router.get('/pkg', (shelf.Request request) {
+        if (_selectedFilePath == null) {
+          return shelf.Response.notFound('File not found');
+        }
+        File file = File(_selectedFilePath!);
+        if (!file.existsSync()) {
+          return shelf.Response.notFound('File not found on disk');
+        }
+        
+        final length = file.lengthSync();
+        final stream = file.openRead();
+
+        return shelf.Response.ok(
+          stream,
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': length.toString(),
+          },
+        );
+      });
+
+      // الحصول على آي بي الهاتف المحلي
+      final info = NetworkInfo();
+      String? localIp = await info.getWifiIP() ?? '127.0.0.1';
+
+      _localServer = await shelf_io.serve(router.call, localIp, 8080);
+      setState(() {
+        _isHosting = true;
+      });
+      print('Local server running at http://$localIp:8080/pkg');
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'خطأ في تشغيل السيرفر المحلي: $e';
+      });
+    }
+  }
+
+  // اختيار الملف وإرسال الرابط للبلايستيشن فوراً
+  Future<void> _pickAndSendToPS4() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.any,
@@ -49,57 +105,54 @@ class _InstallerPageState extends State<InstallerPage> {
           return;
         }
 
-        String ip = _ipController.text.trim();
-        int totalSize = await file.length();
+        _selectedFilePath = file.path;
+        String ps4Ip = _ipController.text.trim();
+        
+        // الحصول على آي بي الهاتف الحالي لإنشاء رابط السيرفر
+        final info = NetworkInfo();
+        String? phoneIp = await info.getWifiIP();
+        
+        if (phoneIp == null) {
+          setState(() {
+            _statusMessage = 'خطأ: لم يتم التعرف على شبكة الواي فاي/الهوتسبوت';
+          });
+          return;
+        }
+
+        String pkgUrl = 'http://$phoneIp:8080/pkg';
 
         setState(() {
-          _isSending = true;
-          _statusMessage = 'جاري النقل بأقصى سرعة...';
+          _statusMessage = 'جاري إرسال الرابط للبلايستيشن...';
         });
 
-        var uri = Uri.parse('http://$ip:12800/api/install');
-        
-        // استخدام StreamedRequest لنقل مباشر بدون تحميل الذاكرة
-        var request = http.StreamedRequest('POST', uri);
-        request.headers['content-type'] = 'application/octet-stream';
-        request.contentLength = totalSize;
-
-        // فتح الملف وقراءته بسرعة عالية وإرساله للـ Sink دفعة دفعة
-        var fileStream = file.openRead();
-        
-        // ربط البث بشكل مباشر وسريع جداً
-        request.sink.addStream(fileStream).then((_) {
-          request.sink.close();
-        }).catchError((err) {
-          request.sink.addError(err);
-        });
-
-        var streamedResponse = await request.send().timeout(
-          const Duration(hours: 3),
-          onTimeout: () {
-            throw Exception('انتهت مهلة الاتصال');
-          },
+        // إرسال طلب التثبيت للـ PS4 (بنفس طريقة Node.js)
+        var uri = Uri.parse('http://$ps4Ip:12800/api/install');
+        var response = await http.post(
+          uri,
+          body: {'type': 'direct', 'packages': '["$pkgUrl"]'},
         );
 
-        if (streamedResponse.statusCode == 200) {
+        if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال اللعبة بنجاح إلى PS4!';
+            _statusMessage = 'تم إرسال رابط اللعبة بنجاح! البلايستيشن يسحب اللعبة الآن مباشرة...';
           });
         } else {
           setState(() {
-            _statusMessage = 'خطأ من البلايستيشن: ${streamedResponse.statusCode}';
+            _statusMessage = 'خطأ من البلايستيشن: ${response.statusCode}';
           });
         }
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'خطأ في النقل: تأكد من الاتصال وسرعة الشبكة';
-      });
-    } finally {
-      setState(() {
-        _isSending = false;
+        _statusMessage = 'خطأ: $e';
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _localServer?.close();
+    super.dispose();
   }
 
   @override
@@ -110,7 +163,7 @@ class _InstallerPageState extends State<InstallerPage> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('PS4 Remote Installer'),
+        title: const Text('PS4 Remote Installer (Server Mode)'),
         backgroundColor: Colors.black54,
       ),
       body: Padding(
@@ -132,32 +185,20 @@ class _InstallerPageState extends State<InstallerPage> {
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 25),
-            _isSending
-                ? Column(
-                    children: const [
-                      CircularProgressIndicator(color: primaryColor),
-                      SizedBox(height: 15),
-                      Text(
-                        'جاري نقل البيانات بأقصى سرعة للـ PS4...\nيرجى الانتظار...',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 14, color: Colors.blueAccent),
-                      ),
-                    ],
-                  )
-                : ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: _pickAndSendFile,
-                    child: const Text(
-                      'اختيار ملف وإرسال',
-                      style: TextStyle(fontSize: 18, color: Colors.white),
-                    ),
-                  ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: _isHosting ? _pickAndSendToPS4 : null,
+              child: const Text(
+                'اختر ملف PKG وابدأ السحب الفوري',
+                style: TextStyle(fontSize: 16, color: Colors.white),
+              ),
+            ),
             const SizedBox(height: 25),
             Text(
               _statusMessage,
