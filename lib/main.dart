@@ -29,7 +29,7 @@ class InstallerPage extends StatefulWidget {
 }
 
 class _InstallerPageState extends State<InstallerPage> {
-  final TextEditingController _ipController = TextEditingController(text: '192.168.0.131');
+  final TextEditingController _ipController = TextEditingController(text: '10.16.250.133');
   bool _isSending = false;
   String _statusMessage = 'جاهز للاستخدام - اضغط للإرسال';
 
@@ -53,49 +53,39 @@ class _InstallerPageState extends State<InstallerPage> {
 
         setState(() {
           _isSending = true;
-          _statusMessage = 'جاري إرسال الملف للـ PS4...';
+          _statusMessage = 'جاري رفع الملف، انتظر قليلاً...';
         });
 
         var uri = Uri.parse('http://$ip:12800/api/install');
-        var request = http.StreamedRequest('POST', uri);
-        request.headers['content-type'] = 'application/octet-stream';
-        request.contentLength = await file.length();
-
-        // بث الملف تدريجياً لضمان استقرار الاتصال وعدم انقطاعه
-        var stream = file.openRead();
-        stream.listen(
-          (chunk) {
-            request.sink.add(chunk);
-          },
-          onDone: () {
-            request.sink.close();
-          },
-          onError: (error) {
-            request.sink.addError(error);
-          },
-          cancelOnError: true,
+        var request = http.MultipartRequest('POST', uri);
+        
+        request.files.add(
+          await http.MultipartFile.fromPath('file', file.path),
         );
 
+        // إرسال الطلب مع مهلة طويلة جداً لملفات الألعاب الكبيرة
         var streamedResponse = await request.send().timeout(
-          const Duration(hours: 3),
+          const Duration(hours: 4),
           onTimeout: () {
-            throw Exception('انتهت مهلة الاتصال');
+            throw Exception('انتهت مهلة الاتصال بسبب حجم الملف');
           },
         );
 
-        if (streamedResponse.statusCode == 200) {
+        var response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال الملف بنجاح إلى PS4!';
+            _statusMessage = 'تم إرسال اللعبة بنجاح إلى PS4! تحقق من شاشة البلايستيشن';
           });
         } else {
           setState(() {
-            _statusMessage = 'خطأ من البلايستيشن: ${streamedResponse.statusCode}';
+            _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
           });
         }
       }
     } catch (e) {
       setState(() {
-        _statusMessage = 'خطأ: تأكد أن برنامج التثبيت مفتوح على PS4';
+        _statusMessage = 'خطأ أثناء الإرسال: تأكد من بقاء التطبيق مفتوحاً';
       });
     } finally {
       setState(() {
@@ -106,9 +96,14 @@ class _InstallerPageState extends State<InstallerPage> {
 
   @override
   Widget build(BuildContext context) {
+    const Color primaryColor = Color(0xFF3B82F6);
+    const Color backgroundColor = Color(0xFF121212);
+
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         title: const Text('PS4 Remote Installer'),
+        backgroundColor: Colors.black54,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -117,19 +112,37 @@ class _InstallerPageState extends State<InstallerPage> {
           children: [
             TextField(
               controller: _ipController,
+              style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: 'PS4 IP Address',
+                labelStyle: TextStyle(color: Colors.grey),
                 border: OutlineInputBorder(),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: primaryColor),
+                ),
               ),
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 25),
             _isSending
-                ? const CircularProgressIndicator()
+                ? Column(
+                    children: const [
+                      CircularProgressIndicator(color: primaryColor),
+                      SizedBox(height: 15),
+                      Text(
+                        'جاري رفع الملف إلى البلايستيشن...\nلا تقفل الشاشة انتظر حتى يكتمل',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: Colors.blueAccent),
+                      ),
+                    ],
+                  )
                 : ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
+                      backgroundColor: primaryColor,
                       padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     onPressed: _pickAndSendFile,
                     child: const Text(
