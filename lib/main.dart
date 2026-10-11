@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -121,17 +120,34 @@ class _InstallerPageState extends State<InstallerPage> {
     return null;
   }
 
-  // دالة تنظيف الكاش تلقائياً في الخلفية
+  // دالة تنظيف الكاش المؤقت تلقائياً
   Future<void> _clearAppCacheDirectly() async {
     try {
-      final tempDir = await getTemporaryDirectory();
-      if (tempDir.existsSync()) {
-        tempDir.listSync(recursive: false).forEach((entity) {
+      final cacheDir = Directory.systemTemp;
+      if (cacheDir.existsSync()) {
+        cacheDir.listSync(recursive: false).forEach((entity) {
           try {
             entity.deleteSync(recursive: true);
           } catch (_) {}
         });
       }
+      await FilePicker.platform.clearTemporaryFiles();
+    } catch (_) {}
+  }
 
-      final appDocDir = await getApplicationDocumentsDirectory();
-      if (appDocDir.
+  Future<void> _pickAndSendToPS4() async {
+    try {
+      // تنظيف الكاش تلقائياً قبل اختيار ملف جديد
+      await _clearAppCacheDirectly();
+
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        String filePath = result.files.single.path!;
+        
+        setState(() {
+          
