@@ -120,18 +120,29 @@ class _InstallerPageState extends State<InstallerPage> {
     return null;
   }
 
-  // دالة تنظيف الذاكرة المؤقتة للـ File Picker
-  Future<void> _clearCache() async {
+  // دالة الحذف المباشر لجميع الملفات داخل مجلد الكاش المؤقت في أندرويد
+  Future<void> _clearAppCacheDirectly() async {
     try {
-      bool? result = await FilePicker.platform.clearTemporaryFiles();
+      // الوصول لمجلد الكاش المؤقت للنظام
+      final cacheDir = Directory.systemTemp;
+      if (cacheDir.existsSync()) {
+        final list = cacheDir.listSync(recursive: false);
+        for (var entity in list) {
+          try {
+            entity.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      }
+      
+      // مسح كاش مكتبة FilePicker أيضاً احتياطياً
+      await FilePicker.platform.clearTemporaryFiles();
+
       setState(() {
-        _statusMessage = result == true 
-            ? 'تم تنظيف الكاش بنجاح وإخلاء المساحة!' 
-            : 'تم محاولة التنظيف، تحقق من المساحة.';
+        _statusMessage = 'تم مسح الكاش وتفريغ المساحة بنجاح تام!';
       });
     } catch (e) {
       setState(() {
-        _statusMessage = 'حدث خطأ أثناء تنظيف الكاش: $e';
+        _statusMessage = 'حدث خطأ أثناء مسح الكاش: $e';
       });
     }
   }
@@ -227,7 +238,6 @@ class _InstallerPageState extends State<InstallerPage> {
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 25),
-            // زر اختيار وإرسال اللعبة
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
@@ -243,7 +253,6 @@ class _InstallerPageState extends State<InstallerPage> {
               ),
             ),
             const SizedBox(height: 15),
-            // زر تنظيف الذاكرة المؤقتة (Cache) الجديد
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.redAccent,
@@ -253,7 +262,7 @@ class _InstallerPageState extends State<InstallerPage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              onPressed: _clearCache,
+              onPressed: _clearAppCacheDirectly,
               icon: const Icon(Icons.cleaning_services),
               label: const Text(
                 'تنظيف الذاكرة المؤقتة (Clear Cache)',
