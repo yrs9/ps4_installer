@@ -120,6 +120,13 @@ class _InstallerPageState extends State<InstallerPage> {
     return null;
   }
 
+  // دالة لتنظيف مسارات الكاش المؤقتة لمنع تضخم المساحة
+  Future<void> _clearCacheFiles() async {
+    try {
+      await FilePicker.platform.clearTemporaryFiles();
+    } catch (_) {}
+  }
+
   Future<void> _pickAndSendToPS4() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -160,24 +167,29 @@ class _InstallerPageState extends State<InstallerPage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن...';
+            _statusMessage = 'تم الإرسال بنجاح! والبلايستيشن يسحب اللعبة الآن';
           });
         } else {
           setState(() {
             _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
           });
         }
+
+        // مسح الذاكرة المؤقتة فوراً بعد الانتهاء لضمان عدم تراكم الملفات
+        await _clearCacheFiles();
       }
     } catch (e) {
       setState(() {
         _statusMessage = 'حدث خطأ: $e';
       });
+      await _clearCacheFiles();
     }
   }
 
   @override
   void dispose() {
     _localServer?.close();
+    _clearCacheFiles();
     super.dispose();
   }
 
