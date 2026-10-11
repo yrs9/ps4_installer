@@ -51,7 +51,7 @@ class _InstallerPageState extends State<InstallerPage> {
 
       router.get('/pkg', (shelf.Request request) {
         try {
-          if (_selectedFilePath == null) {
+          if (_selectedFilePath == null || _selectedFilePath!.isEmpty) {
             return shelf.Response.notFound('No file selected');
           }
           
@@ -132,3 +132,108 @@ class _InstallerPageState extends State<InstallerPage> {
         String filePath = result.files.single.path!;
         
         setState(() {
+          _selectedFilePath = filePath;
+          _statusMessage = 'جاري إرسال رابط اللعبة للبلايستيشن...';
+        });
+
+        String? phoneIp = await _getPhoneIpAddress();
+        if (phoneIp == null) {
+          setState(() {
+            _statusMessage = 'خطأ: لم يتم التعرف على آي بي الهوتسبوت';
+          });
+          return;
+        }
+
+        String ps4Ip = _ipController.text.trim();
+        String pkgUrl = 'http://$phoneIp:8080/pkg';
+
+        var uri = Uri.parse('http://$ps4Ip:12800/api/install');
+        
+        var response = await http.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            "type": "direct",
+            "packages": [pkgUrl]
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          setState(() {
+            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن...';
+          });
+        } else {
+          setState(() {
+            _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
+          });
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'حدث خطأ: $e';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _localServer?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color primaryColor = Color(0xFF3B82F6);
+    const Color backgroundColor = Color(0xFF121212);
+
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      appBar: AppBar(
+        title: const Text('PS4 Remote Installer'),
+        backgroundColor: Colors.black54,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextField(
+              controller: _ipController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'PS4 IP Address',
+                labelStyle: TextStyle(color: Colors.grey),
+                border: OutlineInputBorder(),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: primaryColor),
+                ),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 25),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: _isHosting ? _pickAndSendToPS4 : null,
+              child: const Text(
+                'وابدأ السحب الفوري PKG اختر ملف',
+                style: TextStyle(fontSize: 15, color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 25),
+            Text(
+              _statusMessage,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: Colors.amber),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
