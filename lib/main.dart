@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -70,7 +71,7 @@ class _InstallerPageState extends State<InstallerPage> {
             try {
               final parts = rangeHeader.replaceFirst('bytes=', '').split('-');
               start = int.parse(parts[0]);
-              if (parts.length > 1 && parts[1].isNotEmpty) {
+              if (parts.length > 1 && parts.length > 1 && parts[1].isNotEmpty) {
                 end = int.parse(parts[1]);
               }
             } catch (_) {}
@@ -120,29 +121,39 @@ class _InstallerPageState extends State<InstallerPage> {
     return null;
   }
 
-  // دالة الحذف المباشر لجميع الملفات داخل مجلد الكاش المؤقت في أندرويد
+  // دالة الحذف الشاملة لمسارات الكاش ومستندات التطبيق الداخلية
   Future<void> _clearAppCacheDirectly() async {
     try {
-      // الوصول لمجلد الكاش المؤقت للنظام
-      final cacheDir = Directory.systemTemp;
-      if (cacheDir.existsSync()) {
-        final list = cacheDir.listSync(recursive: false);
-        for (var entity in list) {
+      // 1. مسح مجلد الكاش المؤقت الخاص بالتطبيق
+      final tempDir = await getTemporaryDirectory();
+      if (tempDir.existsSync()) {
+        tempDir.listSync(recursive: false).forEach((entity) {
           try {
             entity.deleteSync(recursive: true);
           } catch (_) {}
-        }
+        });
       }
-      
-      // مسح كاش مكتبة FilePicker أيضاً احتياطياً
+
+      // 2. مسح مجلد ملفات التطبيق الداخلية التي يخزن فيها الـ FilePicker النسخ
+      final appDocDir = await getApplicationDocumentsDirectory();
+      if (appDocDir.existsSync()) {
+        appDocDir.listSync(recursive: false).forEach((entity) {
+          try {
+            entity.deleteSync(recursive: true);
+          } catch (_) {}
+        });
+      }
+
+      // 3. مسح كاش مكتبة الفايل بيッカー
       await FilePicker.platform.clearTemporaryFiles();
 
       setState(() {
-        _statusMessage = 'تم مسح الكاش وتفريغ المساحة بنجاح تام!';
+        _selectedFilePath = null;
+        _statusMessage = 'تم تنظيف البيانات المؤقتة وإخلاء المساحة بنجاح!';
       });
     } catch (e) {
       setState(() {
-        _statusMessage = 'حدث خطأ أثناء مسح الكاش: $e';
+        _statusMessage = 'حدث خطأ أثناء التنظيف: $e';
       });
     }
   }
