@@ -122,6 +122,16 @@ class _InstallerPageState extends State<InstallerPage> {
 
   Future<void> _pickAndSendToPS4() async {
     try {
+      // تنظيف أي مسار سابق مخزن لتفريغ الذاكرة فوراً
+      if (_selectedFilePath != null) {
+        try {
+          final oldFile = File(_selectedFilePath!);
+          if (oldFile.existsSync() && oldFile.path.contains('cache')) {
+            oldFile.deleteSync();
+          }
+        } catch (_) {}
+      }
+
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
@@ -137,7 +147,6 @@ class _InstallerPageState extends State<InstallerPage> {
           return;
         }
 
-        // استخدام مسار الملف الأصلي مباشرة بدون أي عملية نسخ تزيد حجم التطبيق
         setState(() {
           _selectedFilePath = filePath;
           _statusMessage = 'جاري إرسال رابط اللعبة للبلايستيشن...';
