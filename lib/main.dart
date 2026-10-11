@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart' as shelf_router;
-import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -36,8 +35,8 @@ class InstallerPage extends StatefulWidget {
 class _InstallerPageState extends State<InstallerPage> {
   final TextEditingController _ipController = TextEditingController(text: '10.16.250.133');
   HttpServer? _localServer;
-  String? _cachedFilePath;
-  String _statusMessage = 'جاري إقلاع السيرفر المحلي...';
+  String? _selectedFilePath;
+  String _statusMessage = 'السيرفر المحلي جاهز على البورت 8080';
   bool _isHosting = false;
 
   @override
@@ -50,26 +49,47 @@ class _InstallerPageState extends State<InstallerPage> {
     try {
       final router = shelf_router.Router();
 
+      // مسار بث الملفات الضخمة بكفاءة عالية وبدون استهلاك للرام
       router.get('/pkg', (shelf.Request request) {
         try {
-          if (_cachedFilePath == null) {
+          if (_selectedFilePath == null) {
             return shelf.Response.notFound('No file selected');
           }
           
-          File file = File(_cachedFilePath!);
+          File file = File(_selectedFilePath!);
           if (!file.existsSync()) {
-            return shelf.Response.notFound('File does not exist in cache');
+            return shelf.Response.notFound('File does not exist on disk');
           }
 
-          int length = file.lengthSync();
-          var stream = file.openRead();
+          int fileLength = file.lengthSync();
+          
+          // دعم طلبات الـ Range للتحميل المستمر للأسطوانات والألعاب الضخمة
+          String? rangeHeader = request.headers['range'];
+          int start = 0;
+          int end = fileLength - 1;
 
-          return shelf.Response.ok(
-            stream,
+          if (rangeHeader != null) {
+            try {
+              final parts = rangeHeader.replaceFirst('bytes=', '').split('-');
+              start = int.parse(parts[0]);
+              if (parts.length > 1 && parts[1].isNotEmpty) {
+                end = int.parse(parts[1]);
+              }
+            } catch (_) {}
+          }
+
+          int contentLength = end - start + 1;
+          var stream = file.openRead(start, end + 1);
+
+          return shelf.Response(
+            rangeHeader != null ? 206 : 200,
+            body: stream,
             headers: {
               'Content-Type': 'application/octet-stream',
-              'Content-Length': length.toString(),
+              'Content-Length': contentLength.toString(),
               'Accept-Ranges': 'bytes',
+              if (rangeHeader != null)
+                'Content-Range': 'bytes $start-$end/$fileLength',
             },
           );
         } catch (e) {
@@ -80,7 +100,6 @@ class _InstallerPageState extends State<InstallerPage> {
       _localServer = await shelf_io.serve(router.call, '0.0.0.0', 8080);
       setState(() {
         _isHosting = true;
-        _statusMessage = 'السيرفر المحلي جاهز على البورت 8080';
       });
     } catch (e) {
       setState(() {
@@ -111,9 +130,9 @@ class _InstallerPageState extends State<InstallerPage> {
       );
 
       if (result != null && result.files.single.path != null) {
-        File originalFile = File(result.files.single.path!);
+        String filePath = result.files.single.path!;
         
-        if (!originalFile.path.toLowerCase().endsWith('.pkg')) {
+        if (!filePath.toLowerCase().endsWith('.pkg')) {
           setState(() {
             _statusMessage = 'خطأ: يرجى اختيار ملف يحمل امتداد .pkg حصراً';
           });
@@ -121,15 +140,9 @@ class _InstallerPageState extends State<InstallerPage> {
         }
 
         setState(() {
-          _statusMessage = 'جاري معالجة ونسخ الملف مؤقتاً... انتظر قليلاً';
+          _selectedFilePath = filePath;
+          _statusMessage = 'جاري إرسال رابط اللعبة الضخمة للبلايستيشن...';
         });
-
-        // نسخ الملف إلى ذاكرة الكاش الداخلية لتجاوز قيود أندرويد ومنع خطأ 500
-        final tempDir = await getTemporaryDirectory();
-        final targetPath = '${tempDir.path}/game_temp.pkg';
-        
-        File cachedFile = await originalFile.copy(targetPath);
-        _cachedFilePath = cachedFile.path;
 
         String? phoneIp = await _getPhoneIpAddress();
         if (phoneIp == null) {
@@ -141,10 +154,6 @@ class _InstallerPageState extends State<InstallerPage> {
 
         String ps4Ip = _ipController.text.trim();
         String pkgUrl = 'http://$phoneIp:8080/pkg';
-
-        setState(() {
-          _statusMessage = 'جاري إرسال الرابط للبلايستيشن...';
-        });
 
         var uri = Uri.parse('http://$ps4Ip:12800/api/install');
         
@@ -159,7 +168,7 @@ class _InstallerPageState extends State<InstallerPage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم الإرسال بنجاح! راقب شاشة PS4 يبدأ التحميل الفوري...';
+            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الضخمة الآن...';
           });
         } else {
           setState(() {
@@ -220,7 +229,7 @@ class _InstallerPageState extends State<InstallerPage> {
               ),
               onPressed: _isHosting ? _pickAndSendToPS4 : null,
               child: const Text(
-                'اختر ملف PKG وابدأ السحب الفوري',
+                'اختر ملف PKG الضخم وابدأ التحميل',
                 style: TextStyle(fontSize: 16, color: Colors.white),
               ),
             ),
