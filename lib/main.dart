@@ -120,11 +120,20 @@ class _InstallerPageState extends State<InstallerPage> {
     return null;
   }
 
-  // دالة لتنظيف مسارات الكاش المؤقتة لمنع تضخم المساحة
-  Future<void> _clearCacheFiles() async {
+  // دالة تنظيف الذاكرة المؤقتة للـ File Picker
+  Future<void> _clearCache() async {
     try {
-      await FilePicker.platform.clearTemporaryFiles();
-    } catch (_) {}
+      bool? result = await FilePicker.platform.clearTemporaryFiles();
+      setState(() {
+        _statusMessage = result == true 
+            ? 'تم تنظيف الكاش بنجاح وإخلاء المساحة!' 
+            : 'تم محاولة التنظيف، تحقق من المساحة.';
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'حدث خطأ أثناء تنظيف الكاش: $e';
+      });
+    }
   }
 
   Future<void> _pickAndSendToPS4() async {
@@ -167,29 +176,24 @@ class _InstallerPageState extends State<InstallerPage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم الإرسال بنجاح! والبلايستيشن يسحب اللعبة الآن';
+            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن';
           });
         } else {
           setState(() {
             _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
           });
         }
-
-        // مسح الذاكرة المؤقتة فوراً بعد الانتهاء لضمان عدم تراكم الملفات
-        await _clearCacheFiles();
       }
     } catch (e) {
       setState(() {
         _statusMessage = 'حدث خطأ: $e';
       });
-      await _clearCacheFiles();
     }
   }
 
   @override
   void dispose() {
     _localServer?.close();
-    _clearCacheFiles();
     super.dispose();
   }
 
@@ -223,6 +227,7 @@ class _InstallerPageState extends State<InstallerPage> {
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 25),
+            // زر اختيار وإرسال اللعبة
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
@@ -235,6 +240,24 @@ class _InstallerPageState extends State<InstallerPage> {
               child: const Text(
                 'اختر ملف PKG وابدأ السحب الفوري',
                 style: TextStyle(fontSize: 16, color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 15),
+            // زر تنظيف الذاكرة المؤقتة (Cache) الجديد
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.redAccent,
+                side: const BorderSide(color: Colors.redAccent),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: _clearCache,
+              icon: const Icon(Icons.cleaning_services),
+              label: const Text(
+                'تنظيف الذاكرة المؤقتة (Clear Cache)',
+                style: TextStyle(fontSize: 14),
               ),
             ),
             const SizedBox(height: 25),
