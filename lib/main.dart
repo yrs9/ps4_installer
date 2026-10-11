@@ -49,7 +49,6 @@ class _InstallerPageState extends State<InstallerPage> {
     try {
       final router = shelf_router.Router();
 
-      // مسار بث الملفات الضخمة بكفاءة عالية وبدون استهلاك للرام
       router.get('/pkg', (shelf.Request request) {
         try {
           if (_selectedFilePath == null) {
@@ -63,7 +62,6 @@ class _InstallerPageState extends State<InstallerPage> {
 
           int fileLength = file.lengthSync();
           
-          // دعم طلبات الـ Range للتحميل المستمر للأسطوانات والألعاب الضخمة
           String? rangeHeader = request.headers['range'];
           int start = 0;
           int end = fileLength - 1;
@@ -139,9 +137,10 @@ class _InstallerPageState extends State<InstallerPage> {
           return;
         }
 
+        // استخدام مسار الملف الأصلي مباشرة بدون أي عملية نسخ تزيد حجم التطبيق
         setState(() {
           _selectedFilePath = filePath;
-          _statusMessage = 'جاري إرسال رابط اللعبة الضخمة للبلايستيشن...';
+          _statusMessage = 'جاري إرسال رابط اللعبة للبلايستيشن...';
         });
 
         String? phoneIp = await _getPhoneIpAddress();
@@ -168,7 +167,7 @@ class _InstallerPageState extends State<InstallerPage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الضخمة الآن...';
+            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن...';
           });
         } else {
           setState(() {
@@ -229,7 +228,7 @@ class _InstallerPageState extends State<InstallerPage> {
               ),
               onPressed: _isHosting ? _pickAndSendToPS4 : null,
               child: const Text(
-                'اختر ملف PKG الضخم وابدأ التحميل',
+                'اختر ملف PKG وابدأ السحب الفوري',
                 style: TextStyle(fontSize: 16, color: Colors.white),
               ),
             ),
