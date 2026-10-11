@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -34,8 +33,11 @@ class InstallerPage extends StatefulWidget {
 
 class _InstallerPageState extends State<InstallerPage> {
   final TextEditingController _ipController = TextEditingController(text: '10.16.250.133');
+  final TextEditingController _pathController = TextEditingController(
+    text: '/storage/emulated/0/Download/game.pkg'
+  );
+  
   HttpServer? _localServer;
-  String? _selectedFilePath;
   String _statusMessage = 'السيرفر المحلي جاهز على البورت 8080';
   bool _isHosting = false;
 
@@ -51,17 +53,14 @@ class _InstallerPageState extends State<InstallerPage> {
 
       router.get('/pkg', (shelf.Request request) {
         try {
-          if (_selectedFilePath == null) {
-            return shelf.Response.notFound('No file selected');
-          }
+          String filePath = _pathController.text.trim();
+          File file = File(filePath);
           
-          File file = File(_selectedFilePath!);
           if (!file.existsSync()) {
-            return shelf.Response.notFound('File does not exist on disk');
+            return shelf.Response.notFound('File not found at path');
           }
 
           int fileLength = file.lengthSync();
-          
           String? rangeHeader = request.headers['range'];
           int start = 0;
           int end = fileLength - 1;
@@ -120,70 +119,59 @@ class _InstallerPageState extends State<InstallerPage> {
     return null;
   }
 
-  Future<void> _pickAndSendToPS4() async {
+  Future<void> _sendToPS4() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
+      String filePath = _pathController.text.trim();
+      
+      if (!filePath.toLowerCase().endsWith('.pkg')) {
+        setState(() {
+          _statusMessage = 'خطأ: المسار يجب أن ينتهي بـ .pkg';
+        });
+        return;
+      }
+
+      File file = File(filePath);
+      if (!file.existsSync()) {
+        setState(() {
+          _statusMessage = 'خطأ: الملف غير موجود في الذاكرة بهذا المسار!';
+        });
+        return;
+      }
+
+      setState(() {
+        _statusMessage = 'جاري إرسال رابط اللعبة للبلايستيشن...';
+      });
+
+      String? phoneIp = await _getPhoneIpAddress();
+      if (phoneIp == null) {
+        setState(() {
+          _statusMessage = 'خطأ: لم يتم التعرف على آي بي الهوتسبوت';
+        });
+        return;
+      }
+
+      String ps4Ip = _ipController.text.trim();
+      String pkgUrl = 'http://$phoneIp:8080/pkg';
+
+      var uri = Uri.parse('http://$ps4Ip:12800/api/install');
+      
+      var response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "type": "direct",
+          "packages": [pkgUrl]
+        }),
       );
 
-      if (result != null && result.files.single.path != null) {
-        String filePath = result.files.single.path!;
-        
-        if (!filePath.toLowerCase().endsWith('.pkg')) {
-          setState(() {
-            _statusMessage = 'خطأ: يرجى اختيار ملف يحمل امتداد .pkg حصراً';
-          });
-          return;
-        }
-
+      if (response.statusCode == 200) {
         setState(() {
-          _selectedFilePath = filePath;
-          _statusMessage = 'جاري إرسال رابط اللعبة للبلايستيشن...';
+          _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن...';
         });
-
-        String? phoneIp = await _getPhoneIpAddress();
-        if (phoneIp == null) {
-          setState(() {
-            _statusMessage = 'خطأ: لم يتم التعرف على آي بي الهوتسبوت';
-          });
-          return;
-        }
-
-        String ps4Ip = _ipController.text.trim();
-        String pkgUrl = 'http://$phoneIp:8080/pkg';
-
-        var uri = Uri.parse('http://$ps4Ip:12800/api/install');
-        
-        var response = await http.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            "type": "direct",
-            "packages": [pkgUrl]
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          setState(() {
-            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن...';
-          });
-
-          // تنظيف الملف المؤقت فوراً بعد الإرسال لكي لا يستهلك مساحة الهاتف
-          Future.delayed(const Duration(seconds: 4), () {
-            try {
-              final file = File(filePath);
-              if (file.existsSync() && (file.path.contains('cache') || file.path.contains('com.example'))) {
-                file.deleteSync();
-              }
-            } catch (_) {}
-          });
-
-        } else {
-          setState(() {
-            _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
-          });
-        }
+      } else {
+        setState(() {
+          _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
+        });
       }
     } catch (e) {
       setState(() {
@@ -227,6 +215,19 @@ class _InstallerPageState extends State<InstallerPage> {
               ),
               keyboardType: TextInputType.number,
             ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _pathController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'مسار ملف اللعبة (مثال: /storage/emulated/0/Download/game.pkg)',
+                labelStyle: TextStyle(color: Colors.grey),
+                border: OutlineInputBorder(),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: primaryColor),
+                ),
+              ),
+            ),
             const SizedBox(height: 25),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -236,9 +237,9 @@ class _InstallerPageState extends State<InstallerPage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              onPressed: _isHosting ? _pickAndSendToPS4 : null,
+              onPressed: _isHosting ? _sendToPS4 : null,
               child: const Text(
-                'اختر ملف PKG وابدأ السحب الفوري',
+                'إرسال اللعبة إلى PS4 مباشرة',
                 style: TextStyle(fontSize: 16, color: Colors.white),
               ),
             ),
