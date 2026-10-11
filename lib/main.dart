@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart' as shelf_router;
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -35,8 +36,8 @@ class InstallerPage extends StatefulWidget {
 class _InstallerPageState extends State<InstallerPage> {
   final TextEditingController _ipController = TextEditingController(text: '10.16.250.133');
   HttpServer? _localServer;
-  String? _selectedFilePath;
-  String _statusMessage = 'جاهز - يرجى اختيار ملف PKG';
+  String? _cachedFilePath;
+  String _statusMessage = 'جاري إقلاع السيرفر المحلي...';
   bool _isHosting = false;
 
   @override
@@ -51,13 +52,13 @@ class _InstallerPageState extends State<InstallerPage> {
 
       router.get('/pkg', (shelf.Request request) {
         try {
-          if (_selectedFilePath == null) {
+          if (_cachedFilePath == null) {
             return shelf.Response.notFound('No file selected');
           }
           
-          File file = File(_selectedFilePath!);
+          File file = File(_cachedFilePath!);
           if (!file.existsSync()) {
-            return shelf.Response.notFound('File does not exist');
+            return shelf.Response.notFound('File does not exist in cache');
           }
 
           int length = file.lengthSync();
@@ -76,7 +77,6 @@ class _InstallerPageState extends State<InstallerPage> {
         }
       });
 
-      // الاستماع على جميع الواجهات المحلية للهاتف لضمان الاتصال
       _localServer = await shelf_io.serve(router.call, '0.0.0.0', 8080);
       setState(() {
         _isHosting = true;
@@ -89,13 +89,11 @@ class _InstallerPageState extends State<InstallerPage> {
     }
   }
 
-  // الحصول على آي بي الهاتف المتصل بالهوتسبوت تلقائياً
   Future<String?> _getPhoneIpAddress() async {
     for (var interface in await NetworkInterface.list()) {
       for (var addr in interface.addresses) {
         if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
           String ip = addr.address;
-          // تصفية عنوان الهوتسبوت أو الواي فاي المحلي
           if (ip.startsWith('10.') || ip.startsWith('192.') || ip.startsWith('172.')) {
             return ip;
           }
@@ -113,9 +111,9 @@ class _InstallerPageState extends State<InstallerPage> {
       );
 
       if (result != null && result.files.single.path != null) {
-        String filePath = result.files.single.path!;
+        File originalFile = File(result.files.single.path!);
         
-        if (!filePath.toLowerCase().endsWith('.pkg')) {
+        if (!originalFile.path.toLowerCase().endsWith('.pkg')) {
           setState(() {
             _statusMessage = 'خطأ: يرجى اختيار ملف يحمل امتداد .pkg حصراً';
           });
@@ -123,20 +121,30 @@ class _InstallerPageState extends State<InstallerPage> {
         }
 
         setState(() {
-          _selectedFilePath = filePath;
-          _statusMessage = 'جاري جلب عنوان الآي بي وإرسال الرابط...';
+          _statusMessage = 'جاري معالجة ونسخ الملف مؤقتاً... انتظر قليلاً';
         });
+
+        // نسخ الملف إلى ذاكرة الكاش الداخلية لتجاوز قيود أندرويد ومنع خطأ 500
+        final tempDir = await getTemporaryDirectory();
+        final targetPath = '${tempDir.path}/game_temp.pkg';
+        
+        File cachedFile = await originalFile.copy(targetPath);
+        _cachedFilePath = cachedFile.path;
 
         String? phoneIp = await _getPhoneIpAddress();
         if (phoneIp == null) {
           setState(() {
-            _statusMessage = 'خطأ: لم يتم التعرف على آي بي الهاتف. تأكد من تشغيل الهوتسبوت';
+            _statusMessage = 'خطأ: لم يتم التعرف على آي بي الهوتسبوت';
           });
           return;
         }
 
         String ps4Ip = _ipController.text.trim();
         String pkgUrl = 'http://$phoneIp:8080/pkg';
+
+        setState(() {
+          _statusMessage = 'جاري إرسال الرابط للبلايستيشن...';
+        });
 
         var uri = Uri.parse('http://$ps4Ip:12800/api/install');
         
@@ -151,7 +159,7 @@ class _InstallerPageState extends State<InstallerPage> {
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن فوراً...';
+            _statusMessage = 'تم الإرسال بنجاح! راقب شاشة PS4 يبدأ التحميل الفوري...';
           });
         } else {
           setState(() {
@@ -220,7 +228,7 @@ class _InstallerPageState extends State<InstallerPage> {
             Text(
               _statusMessage,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.amber),
+              style: const TextStyle(fontSize: 14, color: Colors.amber),
             ),
           ],
         ),
