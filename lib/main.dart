@@ -122,16 +122,6 @@ class _InstallerPageState extends State<InstallerPage> {
 
   Future<void> _pickAndSendToPS4() async {
     try {
-      // تنظيف أي مسار سابق مخزن لتفريغ الذاكرة فوراً
-      if (_selectedFilePath != null) {
-        try {
-          final oldFile = File(_selectedFilePath!);
-          if (oldFile.existsSync() && oldFile.path.contains('cache')) {
-            oldFile.deleteSync();
-          }
-        } catch (_) {}
-      }
-
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
@@ -178,6 +168,17 @@ class _InstallerPageState extends State<InstallerPage> {
           setState(() {
             _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن...';
           });
+
+          // تنظيف الملف المؤقت فور إرسال الرابط للبلايستيشن للحفاظ على مساحة الهاتف
+          Future.delayed(const Duration(seconds: 3), () {
+            try {
+              final file = File(filePath);
+              if (file.existsSync() && file.path.contains('cache')) {
+                file.deleteSync();
+              }
+            } catch (_) {}
+          });
+
         } else {
           setState(() {
             _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
