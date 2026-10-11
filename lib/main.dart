@@ -204,36 +204,3 @@ class _InstallerPageState extends State<InstallerPage> {
                 labelText: 'PS4 IP Address',
                 labelStyle: TextStyle(color: Colors.grey),
                 border: OutlineInputBorder(),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: primaryColor),
-                ),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 25),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: _isHosting ? _pickAndSendToPS4 : null,
-              child: const Text(
-                'وابدأ السحب الفوري PKG اختر ملف',
-                style: TextStyle(fontSize: 15, color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 25),
-            Text(
-              _statusMessage,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, color: Colors.amber),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
