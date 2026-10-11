@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart' as shelf_router;
-import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -110,7 +109,6 @@ class _InstallerPageState extends State<InstallerPage> {
 
   void _loadPkgFiles() {
     try {
-      // البحث المباشر في مجلد التنزيلات العام بالهاتف بدون أي نسخ
       final directory = Directory('/storage/emulated/0/Download');
       if (directory.existsSync()) {
         final list = directory.listSync(recursive: true);
@@ -235,17 +233,16 @@ class _InstallerPageState extends State<InstallerPage> {
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'ألعاب الـ PKG الموجودة في مجلد Download:',
+                'ألعاب الـ PKG في مجلد Download:',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
               ),
             ),
             const SizedBox(height: 10),
             Expanded(
               child: _pkgFiles.isEmpty
-                  .isEmpty
                   ? const Center(
                       child: Text(
-                        'لا توجد ملفات PKG في مجلد Download\n(تأكد من وضع اللعبة في مجلد Download واضغط تحديث 🔄)',
+                        'لا توجد ملفات PKG في مجلد Download\n(تأكد من وضع اللعبة هناك واضغط تحديث 🔄)',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey),
                       ),
