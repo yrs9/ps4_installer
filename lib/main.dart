@@ -71,7 +71,7 @@ class _InstallerPageState extends State<InstallerPage> {
             try {
               final parts = rangeHeader.replaceFirst('bytes=', '').split('-');
               start = int.parse(parts[0]);
-              if (parts.length > 1 && parts.length > 1 && parts[1].isNotEmpty) {
+              if (parts.length > 1 && parts[1].isNotEmpty) {
                 end = int.parse(parts[1]);
               }
             } catch (_) {}
@@ -121,10 +121,9 @@ class _InstallerPageState extends State<InstallerPage> {
     return null;
   }
 
-  // دالة الحذف الشاملة لمسارات الكاش ومستندات التطبيق الداخلية
+  // دالة تنظيف الكاش تلقائياً في الخلفية
   Future<void> _clearAppCacheDirectly() async {
     try {
-      // 1. مسح مجلد الكاش المؤقت الخاص بالتطبيق
       final tempDir = await getTemporaryDirectory();
       if (tempDir.existsSync()) {
         tempDir.listSync(recursive: false).forEach((entity) {
@@ -134,161 +133,5 @@ class _InstallerPageState extends State<InstallerPage> {
         });
       }
 
-      // 2. مسح مجلد ملفات التطبيق الداخلية التي يخزن فيها الـ FilePicker النسخ
       final appDocDir = await getApplicationDocumentsDirectory();
-      if (appDocDir.existsSync()) {
-        appDocDir.listSync(recursive: false).forEach((entity) {
-          try {
-            entity.deleteSync(recursive: true);
-          } catch (_) {}
-        });
-      }
-
-      // 3. مسح كاش مكتبة الفايل بيッカー
-      await FilePicker.platform.clearTemporaryFiles();
-
-      setState(() {
-        _selectedFilePath = null;
-        _statusMessage = 'تم تنظيف البيانات المؤقتة وإخلاء المساحة بنجاح!';
-      });
-    } catch (e) {
-      setState(() {
-        _statusMessage = 'حدث خطأ أثناء التنظيف: $e';
-      });
-    }
-  }
-
-  Future<void> _pickAndSendToPS4() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
-        withData: false,
-      );
-
-      if (result != null && result.files.single.path != null) {
-        String filePath = result.files.single.path!;
-        
-        setState(() {
-          _selectedFilePath = filePath;
-          _statusMessage = 'جاري إرسال رابط اللعبة للبلايستيشن...';
-        });
-
-        String? phoneIp = await _getPhoneIpAddress();
-        if (phoneIp == null) {
-          setState(() {
-            _statusMessage = 'خطأ: لم يتم التعرف على آي بي الهوتسبوت';
-          });
-          return;
-        }
-
-        String ps4Ip = _ipController.text.trim();
-        String pkgUrl = 'http://$phoneIp:8080/pkg';
-
-        var uri = Uri.parse('http://$ps4Ip:12800/api/install');
-        
-        var response = await http.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            "type": "direct",
-            "packages": [pkgUrl]
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          setState(() {
-            _statusMessage = 'تم الإرسال بنجاح! البلايستيشن يسحب اللعبة الآن';
-          });
-        } else {
-          setState(() {
-            _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
-          });
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _statusMessage = 'حدث خطأ: $e';
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _localServer?.close();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const Color primaryColor = Color(0xFF3B82F6);
-    const Color backgroundColor = Color(0xFF121212);
-
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        title: const Text('PS4 Remote Installer'),
-        backgroundColor: Colors.black54,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _ipController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'PS4 IP Address',
-                labelStyle: TextStyle(color: Colors.grey),
-                border: OutlineInputBorder(),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: primaryColor),
-                ),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 25),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: _isHosting ? _pickAndSendToPS4 : null,
-              child: const Text(
-                'اختر ملف PKG وابدأ السحب الفوري',
-                style: TextStyle(fontSize: 16, color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 15),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.redAccent,
-                side: const BorderSide(color: Colors.redAccent),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: _clearAppCacheDirectly,
-              icon: const Icon(Icons.cleaning_services),
-              label: const Text(
-                'تنظيف الذاكرة المؤقتة (Clear Cache)',
-                style: TextStyle(fontSize: 14),
-              ),
-            ),
-            const SizedBox(height: 25),
-            Text(
-              _statusMessage,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, color: Colors.amber),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+      if (appDocDir.
