@@ -1,148 +1,251 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:shelf_router/shelf_router.dart' as shelf_router;
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  // تنظيف الكاش عند فتح التطبيق كإجراء احترازي
-  await clearAppCache();
+void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'PS4 PKG Installer',
+      title: 'PS4 Remote Installer',
       theme: ThemeData.dark(),
-      home: const PS4InstallerHome(),
+      home: const InstallerPage(),
     );
   }
 }
 
-// دالة تنظيف الملفات المؤقتة لمنع تضخم المساحة
-Future<void> clearAppCache() async {
-  try {
-    final tempDir = await getTemporaryDirectory();
-    if (tempDir.existsSync()) {
-      final List<FileSystemEntity> files = tempDir.listSync();
-      for (var file in files) {
-        if (file is File) {
-          await file.delete();
+class InstallerPage extends StatefulWidget {
+  const InstallerPage({Key? key}) : super(key: key);
+
+  @override
+  _InstallerPageState createState() => _InstallerPageState();
+}
+
+class _InstallerPageState extends State<InstallerPage> {
+  final TextEditingController _ipController = TextEditingController(text: '10.16.250.133');
+  HttpServer? _localServer;
+  String? _selectedFilePath;
+  String _statusMessage = 'السيرفر المحلي جاهز على البورت 8080';
+  bool _isHosting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startLocalServer();
+  }
+
+  Future<void> _startLocalServer() async {
+    try {
+      final router = shelf_router.Router();
+
+      router.get('/pkg', (shelf.Request request) {
+        try {
+          if (_selectedFilePath == null || _selectedFilePath!.isEmpty) {
+            return shelf.Response.notFound('No file selected');
+          }
+          
+          File file = File(_selectedFilePath!);
+          if (!file.existsSync()) {
+            return shelf.Response.notFound('File does not exist on disk');
+          }
+
+          int fileLength = file.lengthSync();
+          
+          String? rangeHeader = request.headers['range'];
+          int start = 0;
+          int end = fileLength - 1;
+
+          if (rangeHeader != null) {
+            try {
+              final parts = rangeHeader.replaceFirst('bytes=', '').split('-');
+              start = int.parse(parts[0]);
+              if (parts.length > 1 && parts[1].isNotEmpty) {
+                end = int.parse(parts[1]);
+              }
+            } catch (_) {}
+          }
+
+          int contentLength = end - start + 1;
+          var stream = file.openRead(start, end + 1);
+
+          return shelf.Response(
+            rangeHeader != null ? 206 : 200,
+            body: stream,
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'Content-Length': contentLength.toString(),
+              'Accept-Ranges': 'bytes',
+              if (rangeHeader != null)
+                'Content-Range': 'bytes $start-$end/$fileLength',
+            },
+          );
+        } catch (e) {
+          return shelf.Response.internalServerError(body: 'Error: $e');
+        }
+      });
+
+      _localServer = await shelf_io.serve(router.call, '0.0.0.0', 8080);
+      setState(() {
+        _isHosting = true;
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'خطأ في تشغيل السيرفر: $e';
+      });
+    }
+  }
+
+  Future<String?> _getPhoneIpAddress() async {
+    for (var interface in await NetworkInterface.list()) {
+      for (var addr in interface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          String ip = addr.address;
+          if (ip.startsWith('10.') || ip.startsWith('192.') || ip.startsWith('172.')) {
+            return ip;
+          }
         }
       }
     }
-  } catch (e) {
-    debugPrint('خطأ أثناء تنظيف الكاش: $e');
+    return null;
   }
-}
 
-class PS4InstallerHome extends StatefulWidget {
-  const PS4InstallerHome({super.key});
+  // دالة لتنظيف مسارات الكاش المؤقتة لمنع تضخم المساحة
+  Future<void> _clearCacheFiles() async {
+    try {
+      await FilePicker.platform.clearTemporaryFiles();
+    } catch (_) {}
+  }
 
-  @override
-  State<PS4InstallerHome> createState() => _PS4InstallerHomeState();
-}
-
-class _PS4InstallerHomeState extends State<PS4InstallerHome> {
-  final TextEditingController _ipController = TextEditingController();
-  bool _isSending = false;
-  String _statusMessage = 'جاهز لاختيار ملف الـ PKG';
-
-  // دالة إرسال الملف المباشر دون عمل نسخة مؤقتة
-  Future<void> sendPkgFile() async {
-    final ip = _ipController.text.trim();
-    if (ip.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى كتابة عنوان IP الـ PS4')),
+  Future<void> _pickAndSendToPS4() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: false,
       );
-      return;
-    }
 
-    // اختيار الملف مع تفعيل withReadStream لتجنب نسخه بداخل مجلد الكاش
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pkg'],
-      withReadStream: true,
-    );
-
-    if (result != null && result.files.single.path != null) {
-      final filePath = result.files.single.path!;
-      final fileSize = result.files.single.size;
-
-      setState(() {
-        _isSending = true;
-        _statusMessage = 'جاري إرسال اللعبة إلى الـ PS4...';
-      });
-
-      try {
-        final file = File(filePath);
-        final uri = Uri.parse('http://$ip:12800/api'); // منفذ PS4 Package Installer
+      if (result != null && result.files.single.path != null) {
+        String filePath = result.files.single.path!;
         
-        var request = http.StreamedRequest('POST', uri);
-        request.headers[HttpHeaders.contentLengthHeader] = fileSize.toString();
+        setState(() {
+          _selectedFilePath = filePath;
+          _statusMessage = 'جاري إرسال رابط اللعبة للبلايستيشن...';
+        });
 
-        // بث قراءة الملف مباشرة للشبكة
-        file.openRead().listen(
-          (chunk) => request.sink.add(chunk),
-          onDone: () => request.sink.close(),
-          onError: (e) => request.sink.close(),
-          cancelOnError: true,
+        String? phoneIp = await _getPhoneIpAddress();
+        if (phoneIp == null) {
+          setState(() {
+            _statusMessage = 'خطأ: لم يتم التعرف على آي بي الهوتسبوت';
+          });
+          return;
+        }
+
+        String ps4Ip = _ipController.text.trim();
+        String pkgUrl = 'http://$phoneIp:8080/pkg';
+
+        var uri = Uri.parse('http://$ps4Ip:12800/api/install');
+        
+        var response = await http.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            "type": "direct",
+            "packages": [pkgUrl]
+          }),
         );
-
-        var response = await request.send();
 
         if (response.statusCode == 200) {
           setState(() {
-            _statusMessage = 'تم إرسال اللعبة وتثبيتها بنجاح!';
+            _statusMessage = 'تم الإرسال بنجاح! والبلايستيشن يسحب اللعبة الآن';
           });
         } else {
           setState(() {
-            _statusMessage = 'فشل الإرسال. كود الخطأ: ${response.statusCode}';
+            _statusMessage = 'خطأ من البلايستيشن: رمز الاستجابة ${response.statusCode}';
           });
         }
-      } catch (e) {
-        setState(() {
-          _statusMessage = 'حدث خطأ بالاتصال: $e';
-        });
-      } finally {
-        // تنظيف أي مخلفات مؤقتة فوراً بعد الانتهاء
-        await clearAppCache();
-        setState(() {
-          _isSending = false;
-        });
+
+        // مسح الذاكرة المؤقتة فوراً بعد الانتهاء لضمان عدم تراكم الملفات
+        await _clearCacheFiles();
       }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'حدث خطأ: $e';
+      });
+      await _clearCacheFiles();
     }
+  }
+
+  @override
+  void dispose() {
+    _localServer?.close();
+    _clearCacheFiles();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    const Color primaryColor = Color(0xFF3B82F6);
+    const Color backgroundColor = Color(0xFF121212);
+
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('PS4 Installer'),
-        centerTitle: true,
+        title: const Text('PS4 Remote Installer'),
+        backgroundColor: Colors.black54,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TextField(
               controller: _ipController,
-              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
-                labelText: 'عنوان IP الخاص بالـ PS4',
-                hintText: '192.168.1.XX',
+                labelText: 'PS4 IP Address',
+                labelStyle: TextStyle(color: Colors.grey),
                 border: OutlineInputBorder(),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: primaryColor),
+                ),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 25),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: _isHosting ? _pickAndSendToPS4 : null,
+              child: const Text(
+                'اختر ملف PKG وابدأ السحب الفوري',
+                style: TextStyle(fontSize: 16, color: Colors.white),
               ),
             ),
             const SizedBox(height: 25),
             Text(
               _statusMessage,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: const TextStyle(fontSize: 14, color: Colors.amber),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
