@@ -125,6 +125,7 @@ class _InstallerPageState extends State<InstallerPage> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
+        withData: false, // منع جلب بيانات الملف في الذاكرة لتفادي النسخ والتضخم
       );
 
       if (result != null && result.files.single.path != null) {
