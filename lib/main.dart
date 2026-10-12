@@ -51,8 +51,7 @@ class _InstallerPageState extends State<InstallerPage> {
       });
 
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pkg'],
+        type: FileType.any,
       );
 
       if (result != null && result.files.single.path != null) {
