@@ -3,7 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as io;
-import 'package:shelf_router/shelf_router.dart';
+import 'package:shelf_router/shelf_router.dart' as shelf_router;
 import 'dart:io';
 
 void main() {
@@ -63,7 +63,7 @@ class _InstallerPageState extends State<InstallerPage> {
           await _server!.close();
         }
 
-        final router = Router();
+        final router = shelf_router.Router();
         router.get('/pkg', (shelf.Request request) {
           return shelf.Response.ok(file.openRead(), headers: {
             'Content-Type': 'application/octet-stream',
