@@ -1,153 +1,184 @@
-import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:shelf/shelf.dart' as shelf;
-import 'package:shelf/shelf_io.dart' as shelf_io;
-import 'package:shelf_router/shelf_router.dart' as shelf_router;
+import 'package:shelf/shelf_io.dart' as io;
+import 'package:shelf_router/shelf_router.dart';
+import 'dart:io';
 
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'PS4 Remote Installer',
-      theme: ThemeData.dark(),
+      theme: ThemeData(primarySwatch: Colors.blue),
       home: const InstallerPage(),
     );
   }
 }
 
 class InstallerPage extends StatefulWidget {
-  const InstallerPage({Key? key}) : super(key: key);
+  const InstallerPage({super.key});
 
   @override
-  _InstallerPageState createState() => _InstallerPageState();
+  State<InstallerPage> createState() => _InstallerPageState();
 }
 
 class _InstallerPageState extends State<InstallerPage> {
-  final TextEditingController _ipController = TextEditingController(text: '10.16.250.133');
-  HttpServer? _localServer;
-  String? _selectedFilePath;
-  String _statusMessage = 'السيرفر المحلي جاهز على البورت 8080';
-  bool _isHosting = false;
+  String _status = 'جاهز للاستخدام';
+  HttpServer? _server;
+  String _hostedFileUrl = '';
+  final TextEditingController _ipController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _startLocalServer();
+  void dispose() {
+    _server?.close();
+    _ipController.dispose();
+    super.dispose();
   }
 
-  Future<void> _startLocalServer() async {
+  Future<void> _startServerAndPickFile() async {
     try {
-      final router = shelf_router.Router();
-
-      router.get('/pkg', (shelf.Request request) {
-        try {
-          if (_selectedFilePath == null || _selectedFilePath!.isEmpty) {
-            return shelf.Response.notFound('No file selected');
-          }
-          
-          File file = File(_selectedFilePath!);
-          if (!file.existsSync()) {
-            return shelf.Response.notFound('File does not exist on disk');
-          }
-
-          int fileLength = file.lengthSync();
-          
-          String? rangeHeader = request.headers['range'];
-          int start = 0;
-          int end = fileLength - 1;
-
-          if (rangeHeader != null) {
-            try {
-              final parts = rangeHeader.replaceFirst('bytes=', '').split('-');
-              start = int.parse(parts[0]);
-              if (parts.length > 1 && parts[1].isNotEmpty) {
-                end = int.parse(parts[1]);
-              }
-            } catch (_) {}
-          }
-
-          int contentLength = end - start + 1;
-          var stream = file.openRead(start, end + 1);
-
-          return shelf.Response(
-            rangeHeader != null ? 206 : 200,
-            body: stream,
-            headers: {
-              'Content-Type': 'application/octet-stream',
-              'Content-Length': contentLength.toString(),
-              'Accept-Ranges': 'bytes',
-              if (rangeHeader != null)
-                'Content-Range': 'bytes $start-$end/$fileLength',
-            },
-          );
-        } catch (e) {
-          return shelf.Response.internalServerError(body: 'Error: $e');
-        }
-      });
-
-      _localServer = await shelf_io.serve(router.call, '0.0.0.0', 8080);
       setState(() {
-        _isHosting = true;
+        _status = 'جاري اختيار الملف...';
       });
-    } catch (e) {
-      setState(() {
-        _statusMessage = 'خطأ في تشغيل السيرفر: $e';
-      });
-    }
-  }
-
-  Future<String?> _getPhoneIpAddress() async {
-    for (var interface in await NetworkInterface.list()) {
-      for (var addr in interface.addresses) {
-        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-          String ip = addr.address;
-          if (ip.startsWith('10.') || ip.startsWith('192.') || ip.startsWith('172.')) {
-            return ip;
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  // دالة تنظيف الكاش المؤقت تلقائياً
-  Future<void> _clearAppCacheDirectly() async {
-    try {
-      final cacheDir = Directory.systemTemp;
-      if (cacheDir.existsSync()) {
-        cacheDir.listSync(recursive: false).forEach((entity) {
-          try {
-            entity.deleteSync(recursive: true);
-          } catch (_) {}
-        });
-      }
-      await FilePicker.platform.clearTemporaryFiles();
-    } catch (_) {}
-  }
-
-  Future<void> _pickAndSendToPS4() async {
-    try {
-      // تنظيف الكاش تلقائياً قبل اختيار ملف جديد
-      await _clearAppCacheDirectly();
 
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
-        withData: false,
+        type: FileType.custom,
+        allowedExtensions: ['pkg'],
       );
 
       if (result != null && result.files.single.path != null) {
         String filePath = result.files.single.path!;
+        File file = File(filePath);
+
+        if (_server != null) {
+          await _server!.close();
+        }
+
+        final router = Router();
+        router.get('/pkg', (shelf.Request request) {
+          return shelf.Response.ok(file.openRead(), headers: {
+            'Content-Type': 'application/octet-stream',
+          });
+        });
+
+        _server = await io.serve(router.call, InternetAddress.anyIPv4, 8080);
         
+        String localIp = await _getLocalIp();
         setState(() {
-          
+          _hostedFileUrl = 'http://$localIp:8080/pkg';
+          _status = 'تم استضافة الملف بنجاح: $_hostedFileUrl';
+        });
+      } else {
+        setState(() {
+          _status = 'تم إلغاء اختيار الملف';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _status = 'خطأ: $e';
+      });
+    }
+  }
+
+  Future<String> _getLocalIp() async {
+    for (var interface in await NetworkInterface.list()) {
+      for (var addr in interface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          return addr.address;
+        }
+      }
+    }
+    return '127.0.0.1';
+  }
+
+  Future<void> _sendToPS4() async {
+    final ps4Ip = _ipController.text.trim();
+    if (ps4Ip.isEmpty || _hostedFileUrl.isEmpty) {
+      setState(() {
+        _status = 'الرجاء إدخال آيباد الـ PS4 واختيار ملف PKG أولاً.';
+      });
+      return;
+    }
+
+    try {
+      setState(() {
+        _status = 'جاري الإرسال إلى السوني...';
+      });
+
+      final url = Uri.parse('http://$ps4Ip:12800/api/install');
+      final response = await http.post(
+        url,
+        body: '{"type": "direct", "url": "$_hostedFileUrl"}',
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _status = 'بدأ التثبيت على الـ PS4 بنجاح!';
+        });
+      } else {
+        setState(() {
+          _status = 'فشل الإرسال: ${response.body}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _status = 'خطأ في الاتصال: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('PS4 Remote Installer'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _ipController,
+              decoration: const InputDecoration(
+                labelText: 'أدخل آيباد بلايستيشن 4 (PS4 IP)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _startServerAndPickFile,
+              icon: const Icon(Icons.folder_open),
+              label: const Text('اختر ملف PKG'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _sendToPS4,
+              icon: const Icon(Icons.send),
+              label: const Text('تثبيت على الـ PS4'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 30),
+            Text(
+              _status,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
