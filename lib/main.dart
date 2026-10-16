@@ -44,12 +44,12 @@ class _InstallerPageState extends State<InstallerPage> {
     super.dispose();
   }
 
-  // جلب آيباد الهاتف المحلي تلقائياً بشكل آمن وبدون إدخال يدوي
+  // دالة موثوقة لجلب آيباد الهاتف في الشبكة المحلية
   Future<String> _getLocalIp() async {
     try {
-      for (var interface in await NetworkInterface.list()) {
+      for (var interface in await NetworkInterface.list(includeLoopback: false, type: InternetAddressType.IPv4)) {
         for (var addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          if (addr.address.startsWith('192.') || addr.address.startsWith('10.') || addr.address.startsWith('172.')) {
             return addr.address;
           }
         }
@@ -76,7 +76,9 @@ class _InstallerPageState extends State<InstallerPage> {
           await _server!.close();
         }
 
-        String localIp = await _getLocalIp();
+        // تشغيل السيرفر على أي واجهة شبكة متاحة لتفادي مشاكل الأذونات
+        _server = await io.serve((req) => const shelf.Response.ok(''), InternetAddress.anyIPv4, 8080);
+        await _server!.close();
 
         final router = shelf_router.Router();
         router.get('/pkg', (shelf.Request request) {
@@ -85,8 +87,10 @@ class _InstallerPageState extends State<InstallerPage> {
           });
         });
 
-        _server = await io.serve(router.call, localIp, 8080);
+        // إعادة تشغيل السيرفر فعلياً لاستضافة الملف
+        _server = await io.serve(router.call, InternetAddress.anyIPv4, 8080);
         
+        String localIp = await _getLocalIp();
         setState(() {
           _hostedFileUrl = 'http://$localIp:8080/pkg';
           _status = 'تم استضافة الملف بنجاح\n$_hostedFileUrl';
@@ -103,7 +107,6 @@ class _InstallerPageState extends State<InstallerPage> {
     }
   }
 
-  // إرسال طلب التثبيت المباشر في الخلفية إلى الـ PS4
   Future<void> _sendToPS4() async {
     final ps4Ip = _ipController.text.trim();
     if (ps4Ip.isEmpty || _hostedFileUrl.isEmpty) {
@@ -164,27 +167,3 @@ class _InstallerPageState extends State<InstallerPage> {
                 onPressed: _startServerAndPickFile,
                 icon: const Icon(Icons.folder_open),
                 label: const Text('اختر ملف PKG'),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _sendToPS4,
-                icon: const Icon(Icons.send),
-                label: const Text('تثبيت مباشر في الخلفية على PS4'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 30),
-              Text(
-                _status,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
