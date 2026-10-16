@@ -62,6 +62,8 @@ class _InstallerPageState extends State<InstallerPage> {
           await _server!.close();
         }
 
+        String localIp = await _getLocalIp();
+
         final router = shelf_router.Router();
         router.get('/pkg', (shelf.Request request) {
           return shelf.Response.ok(file.openRead(), headers: {
@@ -69,9 +71,9 @@ class _InstallerPageState extends State<InstallerPage> {
           });
         });
 
-        _server = await io.serve(router.call, InternetAddress.anyIPv4, 8080);
+        // ربط السيرفر بالآيباد المحلي بدلاً من 0.0.0.0 لتجنب قيود أندرويد
+        _server = await io.serve(router.call, localIp, 8080);
         
-        String localIp = await _getLocalIp();
         setState(() {
           _hostedFileUrl = 'http://$localIp:8080/pkg';
           _status = 'تم استضافة الملف بنجاح: $_hostedFileUrl';
