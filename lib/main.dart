@@ -36,15 +36,25 @@ class _InstallerPageState extends State<InstallerPage> {
   HttpServer? _server;
   String _hostedFileUrl = '';
   final TextEditingController _ipController = TextEditingController();
+  final TextEditingController _phoneIpController = TextEditingController();
 
   @override
   void dispose() {
     _server?.close();
     _ipController.dispose();
+    _phoneIpController.dispose();
     super.dispose();
   }
 
   Future<void> _startServerAndPickFile() async {
+    final phoneIp = _phoneIpController.text.trim();
+    if (phoneIp.isEmpty) {
+      setState(() {
+        _status = 'الرجاء إدخال آيباد الهاتف (حتى يتصل به السوني)';
+      });
+      return;
+    }
+
     try {
       setState(() {
         _status = 'جاري اختيار الملف...';
@@ -62,8 +72,6 @@ class _InstallerPageState extends State<InstallerPage> {
           await _server!.close();
         }
 
-        String localIp = await _getLocalIp();
-
         final router = shelf_router.Router();
         router.get('/pkg', (shelf.Request request) {
           return shelf.Response.ok(file.openRead(), headers: {
@@ -71,11 +79,11 @@ class _InstallerPageState extends State<InstallerPage> {
           });
         });
 
-        // ربط السيرفر بالآيباد المحلي بدلاً من 0.0.0.0 لتجنب قيود أندرويد
-        _server = await io.serve(router.call, localIp, 8080);
+        // الاستماع على أي واجهة شبكة بدون البحث التلقائي لتفادي الأخطاء
+        _server = await io.serve(router.call, InternetAddress.anyIPv4, 8080);
         
         setState(() {
-          _hostedFileUrl = 'http://$localIp:8080/pkg';
+          _hostedFileUrl = 'http://$phoneIp:8080/pkg';
           _status = 'تم استضافة الملف بنجاح: $_hostedFileUrl';
         });
       } else {
@@ -85,20 +93,9 @@ class _InstallerPageState extends State<InstallerPage> {
       }
     } catch (e) {
       setState(() {
-        _status = 'خطأ: $e';
+        _status = 'خطأ في تشغيل السيرفر: $e';
       });
     }
-  }
-
-  Future<String> _getLocalIp() async {
-    for (var interface in await NetworkInterface.list()) {
-      for (var addr in interface.addresses) {
-        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-          return addr.address;
-        }
-      }
-    }
-    return '127.0.0.1';
   }
 
   Future<void> _sendToPS4() async {
@@ -145,39 +142,50 @@ class _InstallerPageState extends State<InstallerPage> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _ipController,
-              decoration: const InputDecoration(
-                labelText: 'أدخل آيباد بلايستيشن 4 (PS4 IP)',
-                border: OutlineInputBorder(),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(
+                controller: _ipController,
+                decoration: const InputDecoration(
+                  labelText: 'أدخل آيباد بلايستيشن 4 (PS4 IP)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
               ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: _startServerAndPickFile,
-              icon: const Icon(Icons.folder_open),
-              label: const Text('اختر ملف PKG'),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: _sendToPS4,
-              icon: const Icon(Icons.send),
-              label: const Text('تثبيت على الـ PS4'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+              const SizedBox(height: 15),
+              TextField(
+                controller: _phoneIpController,
+                decoration: const InputDecoration(
+                  labelText: 'أدخل آيباد هاتفك الحالي في الشبكة (Phone IP)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
               ),
-            ),
-            const SizedBox(height: 30),
-            Text(
-              _status,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: _startServerAndPickFile,
+                icon: const Icon(Icons.folder_open),
+                label: const Text('اختر ملف PKG'),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: _sendToPS4,
+                icon: const Icon(Icons.send),
+                label: const Text('تثبيت على الـ PS4'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 30),
+              Text(
+                _status,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
         ),
       ),
     );
