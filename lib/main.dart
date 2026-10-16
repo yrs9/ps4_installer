@@ -44,6 +44,20 @@ class _InstallerPageState extends State<InstallerPage> {
     super.dispose();
   }
 
+  // جلب آيباد الهاتف المحلي تلقائياً بشكل آمن وبدون إدخال يدوي
+  Future<String> _getLocalIp() async {
+    try {
+      for (var interface in await NetworkInterface.list()) {
+        for (var addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+            return addr.address;
+          }
+        }
+      }
+    } catch (_) {}
+    return '127.0.0.1';
+  }
+
   Future<void> _startServerAndPickFile() async {
     try {
       setState(() {
@@ -62,15 +76,7 @@ class _InstallerPageState extends State<InstallerPage> {
           await _server!.close();
         }
 
-        // جلب آيباد الهاتف المحلي تلقائياً بدون أخطاء
-        String localIp = '127.0.0.1';
-        try {
-          final socket = await Socket.connect('8.8.8.8', 53, timeout: const Duration(seconds: 2));
-          localIp = socket.address.address;
-          socket.destroy();
-        } catch (_) {
-          localIp = '0.0.0.0';
-        }
+        String localIp = await _getLocalIp();
 
         final router = shelf_router.Router();
         router.get('/pkg', (shelf.Request request) {
@@ -83,7 +89,7 @@ class _InstallerPageState extends State<InstallerPage> {
         
         setState(() {
           _hostedFileUrl = 'http://$localIp:8080/pkg';
-          _status = 'تم استضافة الملف بنجاح: $_hostedFileUrl';
+          _status = 'تم استضافة الملف بنجاح\n$_hostedFileUrl';
         });
       } else {
         setState(() {
@@ -97,6 +103,7 @@ class _InstallerPageState extends State<InstallerPage> {
     }
   }
 
+  // إرسال طلب التثبيت المباشر في الخلفية إلى الـ PS4
   Future<void> _sendToPS4() async {
     final ps4Ip = _ipController.text.trim();
     if (ps4Ip.isEmpty || _hostedFileUrl.isEmpty) {
@@ -108,7 +115,7 @@ class _InstallerPageState extends State<InstallerPage> {
 
     try {
       setState(() {
-        _status = 'جاري الإرسال إلى السوني...';
+        _status = 'جاري إرسال أمر التثبيت للخلفية...';
       });
 
       final url = Uri.parse('http://$ps4Ip:12800/api/install');
@@ -119,16 +126,16 @@ class _InstallerPageState extends State<InstallerPage> {
 
       if (response.statusCode == 200) {
         setState(() {
-          _status = 'بدأ التثبيت على الـ PS4 بنجاح!';
+          _status = 'تم إرسال الأمر بنجاح! راقب إشعار التحميل على الـ PS4';
         });
       } else {
         setState(() {
-          _status = 'فشل الإرسال: ${response.body}';
+          _status = 'فشل الرد من السوني: ${response.body}';
         });
       }
     } catch (e) {
       setState(() {
-        _status = 'خطأ في الاتصال: $e';
+        _status = 'خطأ في الاتصال بالـ PS4: $e';
       });
     }
   }
@@ -162,7 +169,7 @@ class _InstallerPageState extends State<InstallerPage> {
               ElevatedButton.icon(
                 onPressed: _sendToPS4,
                 icon: const Icon(Icons.send),
-                label: const Text('تثبيت على الـ PS4'),
+                label: const Text('تثبيت مباشر في الخلفية على PS4'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
