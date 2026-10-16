@@ -27,19 +27,17 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android Project
-        run: |
-          rm -rf android
-          flutter create . --platforms=android --org com.example.ps4installer
+      - name: Create Android Platform
+        run: flutter create . --platforms=android --org com.example.ps4installer
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build Debug APK
+        run: flutter build apk --debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: PS4-Installer-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
