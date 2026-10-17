@@ -14,20 +14,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 11
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '11'
+          distribution: 'zulu'
+          java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.19.6'
           channel: 'stable'
-
-      - name: Create Android Project
-        run: flutter create . --platforms=android --org com.example.ps4installer
+          cache: true
 
       - name: Install dependencies
         run: flutter pub get
