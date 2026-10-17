@@ -1,7 +1,7 @@
 name: ps4_installer
-description: "A new Flutter project for installing PS4 games."
+description: "Android app to serve PS4 PKG files over a local network."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.3.4 <4.0.0'
@@ -10,9 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
   file_picker: ^6.0.0
-  http: ^1.2.0
-  shelf: ^1.4.1
-  shelf_router: ^1.1.4
 
 dev_dependencies:
   flutter_test:
