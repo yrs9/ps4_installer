@@ -1,20 +1,23 @@
 name: ps4_installer
-description: PS4 Installer
+description: "A new Flutter project for installing PS4 games."
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.3.4 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  file_picker: ^8.1.7
+  file_picker: ^8.0.5
+  http: ^1.2.0
+  shelf: ^1.4.1
+  shelf_router: ^1.1.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
