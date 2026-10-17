@@ -27,8 +27,11 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Create Android Platform
-        run: flutter create . --platforms=android
+      - name: Create Android Platform and Fix Gradle
+        run: |
+          flutter create . --platforms=android
+          cd android
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip" > gradle/wrapper/gradle-wrapper.properties
 
       - name: Install dependencies
         run: flutter pub get
