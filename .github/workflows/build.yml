@@ -27,6 +27,11 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Generate Android project and inject code
+        run: |
+          # إنشاء مشروع مؤقت متكامل بملفات الـ Android والـ Gradle الرسمية
+          flutter create . --platforms=android --org com.example.ps4installer
+
       - name: Install dependencies
         run: flutter pub get
 
