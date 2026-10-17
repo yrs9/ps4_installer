@@ -3,8 +3,7 @@ name: Build APK
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -25,17 +24,18 @@ jobs:
         with:
           flutter-version: '3.19.6'
           channel: 'stable'
-          cache: true
 
-      - name: Create Android Platform
-        run: flutter create . --platforms=android --org com.example.ps4installer
-
-      - name: Fix Gradle Version
+      - name: Generate Android project structure
         run: |
-          cd android
-          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip" > gradle/wrapper/gradle-wrapper.properties
+          flutter create . --platforms=android --org com.yrs9.ps4installer
+          
+      - name: Configure Android SDK versions
+        run: |
+          sed -i 's/compileSdk = .*/compileSdk = 34/' android/app/build.gradle
+          sed -i 's/minSdk = .*/minSdk = 21/' android/app/build.gradle
+          sed -i 's/targetSdk = .*/targetSdk = 34/' android/app/build.gradle
 
-      - name: Install Flutter dependencies
+      - name: Install dependencies
         run: flutter pub get
 
       - name: Build Debug APK
