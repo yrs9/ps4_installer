@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const PS4App());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class PS4App extends StatelessWidget {
+  const PS4App({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -28,35 +28,36 @@ class InstallerPage extends StatefulWidget {
 }
 
 class _InstallerPageState extends State<InstallerPage> {
+  File? pkgFile;
   HttpServer? server;
-  File? selectedFile;
   String status = 'اختر ملف PKG';
-  String url = '';
+  String? downloadUrl;
+  bool busy = false;
 
-  Future<void> selectFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pkg'],
-      );
+  Future<void> choosePkg() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pkg'],
+    );
 
-      if (result == null || result.files.single.path == null) return;
+    if (result == null || result.files.single.path == null) return;
 
-      selectedFile = File(result.files.single.path!);
-
-      setState(() {
-        status = 'تم اختيار الملف: ${result.files.single.name}';
-      });
-    } catch (e) {
-      setState(() => status = 'خطأ: $e');
-    }
+    setState(() {
+      pkgFile = File(result.files.single.path!);
+      status = 'تم اختيار ${result.files.single.name}';
+    });
   }
 
   Future<void> startServer() async {
-    if (selectedFile == null) {
-      setState(() => status = 'اختر ملف PKG أولاً');
+    if (pkgFile == null) {
+      setState(() => status = 'اختَر ملف PKG أولاً');
       return;
     }
+
+    setState(() {
+      busy = true;
+      status = 'جارٍ تشغيل الخادم...';
+    });
 
     try {
       await server?.close(force: true);
@@ -67,18 +68,18 @@ class _InstallerPageState extends State<InstallerPage> {
       );
 
       final interfaces = await NetworkInterface.list(
-        includeLoopback: false,
         type: InternetAddressType.IPv4,
+        includeLoopback: false,
       );
 
       String? ip;
-
       for (final interface in interfaces) {
         for (final address in interface.addresses) {
-          if (address.address.startsWith('192.') ||
-              address.address.startsWith('10.') ||
-              address.address.startsWith('172.')) {
-            ip = address.address;
+          final value = address.address;
+          if (value.startsWith('192.168.') ||
+              value.startsWith('10.') ||
+              value.startsWith('172.')) {
+            ip = value;
             break;
           }
         }
@@ -88,44 +89,54 @@ class _InstallerPageState extends State<InstallerPage> {
       if (ip == null) {
         await server?.close(force: true);
         server = null;
-        setState(() => status = 'اتصل بشبكة Wi-Fi وحاول مجدداً');
+        setState(() => status = 'اتصل بالواي فاي وحاول مجدداً');
         return;
       }
 
-      url = 'http://$ip:8080/pkg';
+      downloadUrl = 'http://$ip:8080/pkg';
+      final activeServer = server!;
 
-      setState(() => status = 'الخادم يعمل: $url');
-
-      server!.listen((request) async {
-        if (request.uri.path != '/pkg' ||
-            request.method != 'GET') {
+      activeServer.listen((request) async {
+        if (request.method != 'GET' ||
+            request.uri.path != '/pkg') {
           request.response.statusCode = HttpStatus.notFound;
           await request.response.close();
           return;
         }
 
         try {
-          final file = selectedFile!;
-          final length = await file.length();
+          final file = pkgFile;
+          if (file == null || !await file.exists()) {
+            request.response.statusCode = HttpStatus.notFound;
+            await request.response.close();
+            return;
+          }
 
-          request.response.headers
-              .set(HttpHeaders.contentTypeHeader, 'application/octet-stream');
+          request.response.headers.contentType =
+              ContentType('application', 'octet-stream');
           request.response.headers.set(
-            HttpHeaders.contentDispositionHeader,
+            'Content-Disposition',
             'attachment; filename="game.pkg"',
           );
-          request.response.headers.contentLength = length;
+          request.response.headers.contentLength =
+              await file.length();
 
           await request.response.addStream(file.openRead());
           await request.response.close();
         } catch (_) {
-          request.response.statusCode =
-              HttpStatus.internalServerError;
+          if (!request.response.headersSent) {
+            request.response.statusCode =
+                HttpStatus.internalServerError;
+          }
           await request.response.close();
         }
       });
+
+      setState(() => status = 'الخادم يعمل');
     } catch (e) {
-      setState(() => status = 'فشل تشغيل الخادم: $e');
+      setState(() => status = 'خطأ: $e');
+    } finally {
+      setState(() => busy = false);
     }
   }
 
@@ -133,7 +144,7 @@ class _InstallerPageState extends State<InstallerPage> {
     await server?.close(force: true);
     server = null;
     setState(() {
-      url = '';
+      downloadUrl = null;
       status = 'تم إيقاف الخادم';
     });
   }
@@ -148,30 +159,46 @@ class _InstallerPageState extends State<InstallerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('PS4 Installer')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.gamepad, size: 70),
-            const SizedBox(height: 20),
-            Text(status, textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: selectFile,
-              child: const Text('اختيار ملف PKG'),
-            ),
-            ElevatedButton(
-              onPressed: startServer,
-              child: const Text('تشغيل الخادم'),
-            ),
-            ElevatedButton(
-              onPressed: stopServer,
-              child: const Text('إيقاف الخادم'),
-            ),
-            if (url.isNotEmpty)
-              SelectableText(url),
-          ],
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.sports_esports, size: 80),
+              const SizedBox(height: 20),
+              Text(status, textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: busy ? null : choosePkg,
+                  child: const Text('اختيار ملف PKG'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: busy ? null : startServer,
+                  child: const Text('تشغيل الخادم'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: stopServer,
+                  child: const Text('إيقاف الخادم'),
+                ),
+              ),
+              if (downloadUrl != null) ...[
+                const SizedBox(height: 20),
+                SelectableText(
+                  downloadUrl!,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
