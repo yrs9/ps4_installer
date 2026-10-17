@@ -27,24 +27,8 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Clean and Create Android
-        run: |
-          flutter clean
-          flutter create . --platforms=android
-
-      - name: Fix Gradle Wrapper
-        run: |
-          cd android
-          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-
-      - name: Install dependencies
+      - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Build Debug APK
-        run: flutter build apk --debug --verbose
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: PS4-Installer-APK
-          path: build/app/outputs/flutter-apk/app-debug.apk
+      - name: Build APK (Release/Debug)
+        run: flutter build apk --release --no-pub
