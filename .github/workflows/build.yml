@@ -27,8 +27,18 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Get Flutter dependencies
+      - name: Re-create Android project template
+        run: |
+          flutter create . --platforms=android --org com.example.ps4installer
+
+      - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Build APK (Release/Debug)
-        run: flutter build apk --release --no-pub
+      - name: Build Debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Installer-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
