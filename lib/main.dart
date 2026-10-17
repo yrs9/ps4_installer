@@ -154,4 +154,22 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
             else
               ElevatedButton.icon(
                 onPressed: _stopServer,
-                
+                icon: const Icon(Icons.stop),
+                label: const Text('إيقاف السيرفر'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  padding: const EdgeInsets.all(12),
+                ),
+              ),
+            const SizedBox(height: 30),
+            Text(
+              _statusMessage,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, color: Colors.amber),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
