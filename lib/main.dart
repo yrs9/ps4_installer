@@ -39,7 +39,6 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
   HttpServer? _server;
   String _statusMessage = 'اختر ملف PKG وابدأ السيرفر محلياً';
 
-  // تشغيل خادم الـ Shelf المحلي
   Future<void> _startServer() async {
     if (_selectedFilePath == null) {
       setState(() {
@@ -74,7 +73,6 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
     }
   }
 
-  // إيقاف السيرفر
   Future<void> _stopServer() async {
     if (_server != null) {
       await _server!.close(force: true);
@@ -85,5 +83,75 @@ class _InstallerHomePageState extends State<InstallerHomePage> {
     }
   }
 
-  // اختيار ملف الـ PKG من الهاتف
-  Future<void> _
+  Future<void> _pickPkgFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _selectedFilePath = result.files.single.path;
+        _fileName = result.files.single.name;
+        _statusMessage = 'تم اختيار الملف: $_fileName';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _server?.close(force: true);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('PS4 PKG Installer (Remote IP)'),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    const Icon(Icons.games, size: 64, color: Colors.blueAccent),
+                    const SizedBox(height: 10),
+                    Text(
+                      _fileName != null ? 'الملف: $_fileName' : 'لم يتم اختيار أي ملف PKG',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _pickPkgFile,
+              icon: const Icon(Icons.folder_open),
+              label: const Text('اختيار ملف PKG من الهاتف'),
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(12)),
+            ),
+            const SizedBox(height: 12),
+            if (!_isServerRunning)
+              ElevatedButton.icon(
+                onPressed: _startServer,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('تشغيل السيرفر المحلي'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  padding: const EdgeInsets.all(12),
+                ),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: _stopServer,
+                
