@@ -25,17 +25,16 @@ jobs:
         with:
           flutter-version: '3.19.6'
           channel: 'stable'
+          cache: true
 
-      - name: Clean and Generate Android
-        run: |
-          flutter clean
-          flutter create . --platforms=android --org com.example.ps4installer
+      - name: Create Android Platform
+        run: flutter create . --platforms=android
 
-      - name: Get Dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK with Stacktrace
-        run: flutter build apk --debug --verbose
+      - name: Build Debug APK
+        run: flutter build apk --debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
