@@ -52,7 +52,7 @@ class _InstallerPageState extends State<InstallerPage> {
         status = 'تم اختيار: ${picked.name}';
       });
     } catch (e) {
-      setState(() => status = 'خطأ في اختيار الملف: $e');
+      setState(() => status = 'خطأ: $e');
     }
   }
 
@@ -136,8 +136,6 @@ class _InstallerPageState extends State<InstallerPage> {
           await request.response.close();
         } catch (_) {
           try {
-            request.response.statusCode =
-                HttpStatus.internalServerError;
             await request.response.close();
           } catch (_) {}
         }
@@ -168,3 +166,51 @@ class _InstallerPageState extends State<InstallerPage> {
   }
 
   @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('PS4 Installer')),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.sports_esports, size: 80),
+              const SizedBox(height: 20),
+              Text(status, textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: busy ? null : choosePkg,
+                  child: const Text('اختيار ملف PKG'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: busy ? null : startServer,
+                  child: const Text('تشغيل الخادم'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: stopServer,
+                  child: const Text('إيقاف الخادم'),
+                ),
+              ),
+              if (downloadUrl != null) ...[
+                const SizedBox(height: 20),
+                SelectableText(
+                  downloadUrl!,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  }
+}
