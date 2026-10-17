@@ -27,9 +27,13 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Re-create Android project template
+      - name: Create Android Platform
+        run: flutter create . --platforms=android --org com.example.ps4installer
+
+      - name: Fix Gradle Version
         run: |
-          flutter create . --platforms=android --org com.example.ps4installer
+          cd android
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip" > gradle/wrapper/gradle-wrapper.properties
 
       - name: Install Flutter dependencies
         run: flutter pub get
