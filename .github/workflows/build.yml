@@ -27,9 +27,13 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Create Android Platform and Fix Gradle
+      - name: Clean and Create Android
         run: |
+          flutter clean
           flutter create . --platforms=android
+
+      - name: Fix Gradle Wrapper
+        run: |
           cd android
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip" > gradle/wrapper/gradle-wrapper.properties
 
@@ -37,7 +41,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Debug APK
-        run: flutter build apk --debug
+        run: flutter build apk --debug --verbose
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
