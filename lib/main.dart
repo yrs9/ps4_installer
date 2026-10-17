@@ -52,3 +52,161 @@ class _InstallerPageState extends State<InstallerPage> {
 
   Future<void> startServer() async {
     if (pkgFile == null) {
+      setState(() => status = 'اختَر ملف PKG أولاً');
+      return;
+    }
+
+    setState(() {
+      busy = true;
+      status = 'جارٍ تشغيل الخادم...';
+    });
+
+    try {
+      await server?.close(force: true);
+
+      final newServer = await HttpServer.bind(
+        InternetAddress.anyIPv4,
+        8080,
+      );
+      server = newServer;
+
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+
+      String? ip;
+
+      for (final interface in interfaces) {
+        for (final address in interface.addresses) {
+          final value = address.address;
+          if (value.startsWith('192.168.') ||
+              value.startsWith('10.') ||
+              value.startsWith('172.')) {
+            ip = value;
+            break;
+          }
+        }
+        if (ip != null) break;
+      }
+
+      if (ip == null) {
+        await newServer.close(force: true);
+        server = null;
+        setState(() => status = 'اتصل بالواي فاي وحاول مجدداً');
+        return;
+      }
+
+      downloadUrl = 'http://$ip:8080/pkg';
+
+      newServer.listen((request) async {
+        if (request.method != 'GET' ||
+            request.uri.path != '/pkg') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
+
+        try {
+          final file = pkgFile;
+
+          if (file == null || !await file.exists()) {
+            request.response.statusCode = HttpStatus.notFound;
+            await request.response.close();
+            return;
+          }
+
+          request.response.headers.contentType =
+              ContentType('application', 'octet-stream');
+
+          request.response.headers.set(
+            'Content-Disposition',
+            'attachment; filename="game.pkg"',
+          );
+
+          request.response.contentLength = await file.length();
+
+          await request.response.addStream(file.openRead());
+          await request.response.close();
+        } catch (_) {
+          try {
+            request.response.statusCode =
+                HttpStatus.internalServerError;
+            await request.response.close();
+          } catch (_) {}
+        }
+      });
+
+      setState(() => status = 'الخادم يعمل');
+    } catch (e) {
+      setState(() => status = 'فشل تشغيل الخادم: $e');
+    } finally {
+      setState(() => busy = false);
+    }
+  }
+
+  Future<void> stopServer() async {
+    await server?.close(force: true);
+    server = null;
+
+    setState(() {
+      downloadUrl = null;
+      status = 'تم إيقاف الخادم';
+    });
+  }
+
+  @override
+  void dispose() {
+    server?.close(force: true);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('PS4 Installer')),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.sports_esports, size: 80),
+              const SizedBox(height: 20),
+              Text(status, textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: busy ? null : choosePkg,
+                  child: const Text('اختيار ملف PKG'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: busy ? null : startServer,
+                  child: const Text('تشغيل الخادم'),
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: stopServer,
+                  child: const Text('إيقاف الخادم'),
+                ),
+              ),
+              if (downloadUrl != null) ...[
+                const SizedBox(height: 20),
+                SelectableText(
+                  downloadUrl!,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
